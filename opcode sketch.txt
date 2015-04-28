@@ -1,0 +1,51 @@
+Opcodes syntax is roughly:
+  (Opcode Name) [(Argument), ...]
+
+$DEST is shorthand for 'the symbol naming a writable local variable'. All operations that produce a result write it into a local variable (the first argument, $DEST).
+$SOURCE is shorthand for 'the symbol naming a local variable that is read by this operation'. Operations that take one local-variable-only argument use this shorthand.
+
+Loads can only write into local variables.
+Stores can only read from local variables.
+
+Load [ local, local ] and Store [ local, local ] are equivalent. That's dumb. :-(
+
+====
+
+LoadConstant [ $DEST, Literal ]
+  Copies the literal value Literal into $DEST.
+
+Load [ $DEST, SourceSymbol ]
+  Copies from SourceSymbol into $DEST.
+
+Store [ DestSymbol, $SOURCE ]
+  Copies from $SOURCE into DestSymbol.
+
+LoadElement [ $DEST, Address ]
+  Copies from SourceSymbol at Address into $DEST. SourceSymbol must be of type Array.
+
+StoreElement [ Address, $SOURCE ]
+  Copies from $SOURCE into DestSymbol at Address. DestSymbol must be of type Array.
+
+LoadAddressOf [ $DEST, SourceSymbol ]
+  Writes the address of SourceSymbol into $DEST.
+
+If [ $SOURCE, TrueBlock, optional FalseBlock ]
+  When $SOURCE == true, TrueBlock is executed.
+  When $SOURCE == false, FalseBlock is executed.
+
+Loop [ LoopId, $SOURCE, ConditionBlock, IterationBlock ]
+  Every iteration, ConditionBlock is executed, then:
+  If $SOURCE == true, IterationBlock is executed and iteration continues.
+  If $SOURCE == false, iteration terminates.
+  LoopId is an literal used to identify the loop for LoopContinue and LoopAbort operations.
+
+LoopContinue [ LoopId ]
+  Jumps to the next iteration of loop #LoopId (the remainder of its IterationBlock is skipped; ConditionBlock runs again, etc...)
+  This can implicitly abort child loops in order to return to the iteration stage of the loop.  
+
+LoopAbort [ LoopId ]
+  Aborts loop #LoopId, skipping the remainder of its IterationBlock. This implicitly aborts any child loops.
+
+Return [ optional $SOURCE ]
+  Exits the function, with $SOURCE as the return value.
+
