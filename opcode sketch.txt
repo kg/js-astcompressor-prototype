@@ -21,13 +21,10 @@ Store [ DestSymbol, $SOURCE ]
   Copies from $SOURCE into DestSymbol.
 
 LoadElement [ $DEST, Address ]
-  Copies from SourceSymbol at Address into $DEST. SourceSymbol must be of type Array.
+  Copies one element at Address into $DEST.
 
 StoreElement [ Address, $SOURCE ]
-  Copies from $SOURCE into DestSymbol at Address. DestSymbol must be of type Array.
-
-LoadAddressOf [ $DEST, SourceSymbol ]
-  Writes the address of SourceSymbol into $DEST.
+  Copies from $SOURCE into one element at Address.
 
 If [ $SOURCE, TrueBlock, optional FalseBlock ]
   When $SOURCE == true, TrueBlock is executed.

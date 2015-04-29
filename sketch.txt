@@ -217,13 +217,14 @@
     The base address within the context, in elements.
   Offset : Argument Node
     The offset within the context, in elements.
-  OffsetMultiplier : Literal Node
-    A constant multiplier for Offset.
+  OffsetShift : Literal Node
+    A constant bit shift for Offset. Positive is shift-right, negative is shift-left.
 
   Abstract address for pointer and array operations.
 
-  Context[Base + (Offset * OffsetMultiplier)], or
-  Context[Base + Offset] for OffsetMultiplier == 1
+  Context[Base + (Offset >> OffsetShift)], or
+  Context[Base + (Offset << -OffsetShift)], or
+  Context[Base + Offset] for OffsetShift == 0
 
 'Null Node' (Argument Node)
   Represents an omitted optional argument.
