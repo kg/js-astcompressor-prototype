@@ -9,14 +9,13 @@
     factory((root.astEncoder = {}));
   }
 }(this, function (exports) {
-  var FormatVersion = 0.000;
-
   var common = require("./ast-common.js");
 
   var NamedTable  = common.NamedTable,
       UniqueTable = common.UniqueTable,
       StringTable = common.StringTable,
       ObjectTable = common.ObjectTable;
+
 
   function JsAstModule () {
     this.strings     = new StringTable("String");
@@ -331,20 +330,12 @@
   };
 
 
-  var magic = new Uint8Array([
-    0x89,
-    87, 101, 98, 65, 83, 77,
-    0x0D, 0x0A, 0x1A, 0x0A
-  ]);
-
-
   // Converts a JsAstModule into a sequence of typed arrays, 
   //  suitable for passing to the Blob constructor.
   function serializeModule (module) {
-    var versionBytes = new Uint8Array(8);
-    (new DataView(versionBytes.buffer, 0, 8)).setFloat64(0, FormatVersion);
+    var result = [common.Magic];
 
-    var result = [magic, versionBytes];
+    serializeUtf8String(result, common.FormatName);
 
     /*
     module.serializeTable(result, module.identifiers, serializeUtf8String);
@@ -356,6 +347,11 @@
     module.strings  .finalize();
     module.arrays   .finalize();
     module.objects  .finalize();
+
+    var rootBytes = new Uint8Array(4);
+    (new DataView(rootBytes.buffer, 0, 4)).setUint32(0, module.root_id);
+
+    result.push(rootBytes);
 
     module.serializeTable(result, module.typeNames, serializeUtf8String);
     module.serializeTable(result, module.strings,   serializeUtf8String);

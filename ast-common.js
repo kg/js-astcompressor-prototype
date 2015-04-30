@@ -345,6 +345,16 @@
 
   ObjectTable.prototype = Object.create(UniqueTable.prototype);
 
+
+  exports.Magic = new Uint8Array([
+    0x89,
+    87, 101, 98, 65, 83, 77,
+    0x0D, 0x0A, 0x1A, 0x0A
+  ]);
+
+  exports.FormatName = "estree-compressed-v1";
+
+
   exports.NamedTable  = NamedTable;
   exports.UniqueTable = UniqueTable;
   exports.StringTable = StringTable;

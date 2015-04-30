@@ -95,6 +95,9 @@ encoding.makeByteReader = function (bytes, index, count) {
       var nextByte = bytes[position];
       position += 1;
       return nextByte;
+    },
+    get_position: function () {
+      return position;
     }
   };
 
@@ -122,6 +125,9 @@ encoding.makeCharacterReader = function (str) {
       var nextChar = cca(str, position);
       position += 1;
       return nextChar;
+    },
+    get_position: function () {
+      return position;
     }
   };
 
