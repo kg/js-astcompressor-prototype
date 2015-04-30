@@ -21,26 +21,6 @@ var fdOut = fs.openSync(outputFile, "w");
 var inputAst = esprima.parse(inputJs);
 var outputModule = js2webasm.astToModule(inputAst);
 
-/*
-
-function dumpTable (t) {
-  var ids = t.finalize();
-
-  for (var i = 0, l = ids.length; i < l; i++) {
-    var id = ids[i];
-    console.log(id.get_index(), id.get_value());
-  }
-}
-
-console.log("\nTypes");
-dumpTable(outputModule.types);
-console.log("\nStrings");
-dumpTable(outputModule.strings);
-console.log("\nIdentifiers");
-dumpTable(outputModule.identifiers);
-
-*/
-
 var segments = js2webasm.serializeModule(outputModule);
 for (var i = 0; i < segments.length; i++) {
   var segment = segments[i];

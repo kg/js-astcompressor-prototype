@@ -9,46 +9,9 @@
     factory((root.js2webasm = {}));
   }
 }(this, function (exports) {
-  function TableId (table, index) {
-    this.table = table;
-    this.index = index;
-  };
-
-  TableId.prototype.get_index = function () {
-    return this.index;
-  };
-
-  TableId.prototype.get_value = function () {
-    return this.table.get(this.index);
-  };
-
-
-  function Table () {
-    this.values = [];
-  };
-
-  Table.prototype.add = function (value) {
-    var index = this.values.length;
-    this.values.push(value);
-
-    return new TableId(this, index);
-  };
-
-  Table.prototype.get = function (index) {
-    return this.values[index];
-  };
-
-  Table.prototype.get_count = function () {
-    return this.values.length;
-  };
-
-  Table.prototype.finalize = function () {
-    return this.values;
-  };
-
-
-  function NamedTableId (entry) {
+  function NamedTableId (entry, semantic) {
     this.entry = entry;
+    this.semantic = semantic;
   };
 
   NamedTableId.prototype.get_name = function () {
@@ -63,18 +26,42 @@
     return this.entry.index;
   };
 
+  NamedTableId.prototype.toString = function () {
+    var index = this.get_index();
+    var name = this.get_name();
+    var prefix = "<#";
+    if (this.semantic)
+      prefix = "<" + this.semantic + " #";
 
-  function NamedTableEntry (name, value) {
+    if (typeof (index) !== "number")
+      index = "?";
+    else if (index === name)
+      return prefix + index + ">";
+    else
+      return prefix + index + " '" + name + "'>";
+  }
+
+  NamedTableId.prototype.valueOf = function () {
+    var index = this.get_index();
+    if (typeof (index) !== "number")
+      throw new Error("No index assigned yet");
+
+    return index;
+  }
+
+
+  function NamedTableEntry (name, value, semantic) {
     this.name = name;
     this.value = value;
-    this.id = new NamedTableId(this);
+    this.id = new NamedTableId(this, semantic);
     this.index = undefined;
   };
 
 
-  function NamedTable () {
+  function NamedTable (semantic) {
     this.entries = Object.create(null);
     this.count = 0;
+    this.semantic = semantic || null;
   };
 
   NamedTable.prototype.add = function (name, value) {
@@ -87,7 +74,7 @@
         return existing.id;
     }
 
-    var entry = new NamedTableEntry(name, value);
+    var entry = new NamedTableEntry(name, value, this.semantic);
     this.count++;
     this.entries[name] = entry;
     return entry.id;
@@ -111,62 +98,23 @@
       return;
   }
 
+  NamedTable.prototype.get_index = function (name) {
+    var entry = this.entries[name];
+
+    if (entry) {
+      if (typeof (entry.index) === "number")
+        return entry.index;
+      else
+        throw new Error("Table not finalized");
+    } else
+      throw new Error("No table entry for '" + name + "'");
+  }
+
   NamedTable.prototype.get_count = function () {
     return this.count;
   };
 
-
-  function UniqueTableId (entry) {
-    this.entry = entry;
-  };
-
-  UniqueTableId.prototype.get_value = function () {
-    return this.entry.value;
-  };
-
-  UniqueTableId.prototype.get_index = function () {
-    return this.entry.index;
-  };
-
-
-  function UniqueTableEntry (value) {
-    this.value = value;
-    this.id = new UniqueTableId(this);
-    this.index = undefined;
-  };
-
-
-  function UniqueTable () {
-    this.entries = Object.create(null);
-    this.count = 0;
-  };
-
-  UniqueTable.prototype.add = function (value) {
-    var existing = this.entries[value];
-
-    if (typeof (existing) !== "undefined")
-      return existing.id;
-
-    var entry = new UniqueTableEntry(value);
-    this.count++;
-    this.entries[value] = entry;
-    return entry.id;
-  };
-
-  UniqueTable.prototype.get_id = function (value) {
-    var entry = this.entries[value];
-
-    if (entry)
-      return entry.id;
-    else
-      return;
-  };
-
-  UniqueTable.prototype.get_count = function () {
-    return this.count;
-  };
-
-  UniqueTable.prototype.finalize = function () {
+  NamedTable.prototype.finalize = function () {
     var result = new Array(this.count);
     var i = 0;
 
@@ -175,8 +123,8 @@
     }
 
     result.sort(function (_lhs, _rhs) {
-      var lhs = _lhs.get_value();
-      var rhs = _rhs.get_value();
+      var lhs = _lhs.get_name();
+      var rhs = _rhs.get_name();
 
       if (rhs > lhs)
         return -1;
@@ -193,10 +141,74 @@
   };
 
 
+  function UniqueTable (nameFromValue, semantic) {
+    if (typeof (nameFromValue) !== "function")
+      throw new Error("Name provider required");
+    else
+      this.nameFromValue = nameFromValue;
+
+    NamedTable.call(this, semantic);
+  };
+
+  UniqueTable.prototype = Object.create(NamedTable.prototype);
+
+  UniqueTable.prototype.add = function (value) {
+    var name = this.nameFromValue(value);
+    return NamedTable.prototype.add.call(this, name, value);
+  };
+
+  // No-op
+  UniqueTable.prototype.get = function (value) {
+    return value;
+  };
+
+  UniqueTable.prototype.get_id = function (value) {
+    var name = this.nameFromValue(value);
+    return NamedTable.prototype.get_id.call(this, name);
+  };
+
+  UniqueTable.prototype.get_index = function (value) {
+    var name = this.nameFromValue(value);
+    return NamedTable.prototype.get_index.call(this, name);
+  };
+
+
+  function StringTable (semantic) {
+    UniqueTable.call(this, function (s) {
+      return String(s);
+    }, semantic);
+  };
+
+  StringTable.prototype = Object.create(UniqueTable.prototype);
+
+
+  function ObjectTable (semantic) {
+    this.idMapping = new WeakMap();
+    this.nextId = 0;
+
+    UniqueTable.call(this, function (o) {
+      var existingId = this.idMapping.get(o);
+      if (typeof (existingId) !== "number")
+        this.idMapping.set(o, existingId = (this.nextId++));
+
+      return existingId;
+    }, semantic);
+  };
+
+  ObjectTable.prototype = Object.create(UniqueTable.prototype);
+
+
   function WebasmModule () {
-    this.strings     = new UniqueTable();
-    this.identifiers = new UniqueTable();
-    this.types       = new UniqueTable();
+    this.strings     = new StringTable("String");
+    // HACK: Just one global stringtable for now
+    /*
+    this.identifiers = new StringTable("Identifier");
+    this.nodeTypes   = new StringTable("NodeType");
+    */
+
+    this.objects     = new ObjectTable("Object");
+
+    this.root_id     = null;
   };
 
 
@@ -205,25 +217,26 @@
     var result = new WebasmModule();
 
     astutil.mutate(root, function visit (context, node) {
-      if (!node || !node.type)
-        return;
+      if (!node || Array.isArray(node))
+        return;      
 
-      result.types.add(node.type);
+      result.walkObject(node, function (key, typeToken, table, value) {
+        result.strings.add(key);
 
-      if (node.type === "Literal") {
-        if (typeof (node.value) === "string") {
-          result.strings.add(node.value);
-        }
-      } else if (node.type === "Identifier") {
-        result.identifiers.add(node.name);
-      }
+        if (table)
+          table.add(value);
+      });
+
+      result.objects.add(node);
     });
+
+    result.root_id = result.objects.get_id(root);
 
     return result;
   };
 
 
-  function serializeUtf8String (value) {
+  function serializeUtf8String (result, text) {
     // UGH
 
     var lengthBytes = 0;
@@ -236,19 +249,83 @@
     };
 
     // Encode but discard bytes to compute length
-    encoding.UTF8.encode(value, counter);
+    encoding.UTF8.encode(text, counter);
 
     var bytes = new Uint8Array(4 + lengthBytes);
 
     (new DataView(bytes.buffer, 0, 4)).setUint32(0, lengthBytes);
 
-    encoding.UTF8.encode(value, bytes, 4);
+    encoding.UTF8.encode(text, bytes, 4);
 
-    return bytes;
+    result.push(bytes);
   };
 
 
-  function serializeTable (result, table, serializeEntry) {
+  WebasmModule.prototype.walkObject = function (node, callback) {
+    for (var k in node) {
+      if (!node.hasOwnProperty(k))
+        continue;
+
+      var v = node[k];
+
+      switch (typeof (v)) {
+        case "string":
+          callback(k, "s", this.strings, v);
+          break;
+
+        case "number":
+          var i = v | 0;
+          if (i === v)
+            callback(k, "i", null, i);
+          else
+            callback(k, "d", null, v);
+          break;
+
+        case "object":
+          if (v === null)
+            callback(k, "n");
+          else
+            callback(k, "o", this.objects, v);
+          break;
+
+        case "boolean":
+          callback(k, "b", null, v ? 1 : 0);
+          break;
+
+        default:
+          throw new Error("Unhandled value type " + typeof (v));
+      }      
+    }
+  };
+
+
+  WebasmModule.prototype.serializeObject = function (result, node) {
+    if (Array.isArray(node))
+      return;
+
+    var serialized = Object.create(null);
+    var strings = this.strings;
+
+    this.walkObject(node, function (key, typeToken, table, value) {
+      var keyIndex = strings.get_index(key);
+
+      if (arguments.length === 2) {
+        serialized[keyIndex] = [typeToken];
+      } else {
+        if (table) {
+          serialized[keyIndex] = [typeToken, table.get_index(value)];
+        } else {
+          serialized[keyIndex] = [typeToken, value];
+        }
+      }
+    });
+
+    var json = JSON.stringify(serialized);
+    serializeUtf8String(result, json);
+  };
+
+
+  WebasmModule.prototype.serializeTable = function (result, table, serializeEntry) {
     var finalized = table.finalize();
 
     var countBytes = new Uint8Array(4);    
@@ -256,8 +333,11 @@
     result.push(countBytes);
 
     for (var i = 0, l = finalized.length; i < l; i++) {
-      var str = finalized[i].get_value();
-      result.push(serializeUtf8String(str));
+      var id = finalized[i];
+      var value = id.get_value();
+
+      // gross
+      serializeEntry.call(this, result, value);
     }
   };
 
@@ -274,9 +354,17 @@
   function serializeModule (module) {
     var result = [magic];
 
-    serializeTable(result, module.types, serializeUtf8String);
-    serializeTable(result, module.identifiers, serializeUtf8String);
-    serializeTable(result, module.strings, serializeUtf8String);
+    /*
+    module.serializeTable(result, module.nodeTypes, serializeUtf8String);
+    module.serializeTable(result, module.identifiers, serializeUtf8String);
+    module.serializeTable(result, module.strings, serializeUtf8String);
+
+    module.serializeTable(result, module.nodes, module.serializeNode);
+    */
+
+    module.serializeTable(result, module.strings, serializeUtf8String);
+
+    module.serializeTable(result, module.objects, module.serializeObject);
 
     return result;
   };
