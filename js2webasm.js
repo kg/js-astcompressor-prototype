@@ -62,9 +62,13 @@
     this.entries = Object.create(null);
     this.count = 0;
     this.semantic = semantic || null;
+    this.isFinalized = false;
   };
 
   NamedTable.prototype.add = function (name, value) {
+    if (this.isFinalized)
+      throw new Error("Table already finalized");
+
     var existing = this.entries[name];
 
     if (typeof (existing) !== "undefined") {
@@ -122,6 +126,9 @@
       result[i++] = this.entries[k].id;
     }
 
+    if (this.isFinalized)
+      return result;
+
     result.sort(function (_lhs, _rhs) {
       var lhs = _lhs.get_name();
       var rhs = _rhs.get_name();
@@ -136,6 +143,8 @@
 
     for (i = 0; i < result.length; i++)
       result[i].entry.index = i;
+
+    this.isFinalized = true;
 
     return result;
   };
@@ -175,6 +184,7 @@
 
   function StringTable (semantic) {
     UniqueTable.call(this, function (s) {
+      // Fixme: This means we can put numbers in here...
       return String(s);
     }, semantic);
   };
@@ -206,6 +216,7 @@
     this.nodeTypes   = new StringTable("NodeType");
     */
 
+    this.arrays      = new ObjectTable("Array");
     this.objects     = new ObjectTable("Object");
 
     this.root_id     = null;
@@ -216,18 +227,33 @@
   function astToModule (root) {
     var result = new WebasmModule();
 
-    astutil.mutate(root, function visit (context, node) {
-      if (!node || Array.isArray(node))
-        return;      
-
-      result.walkObject(node, function (key, typeToken, table, value) {
+    var walkCallback = function (key, typeToken, table, value) {
+      if (typeof (key) === "string")
         result.strings.add(key);
 
-        if (table)
-          table.add(value);
-      });
+      if (table)
+        table.add(value);
+    };
 
-      result.objects.add(node);
+    astutil.mutate(root, function visit (context, node) {
+      if (!node)
+        return;
+
+      var nodeTable;
+
+      if (Array.isArray(node)) {
+        nodeTable = result.arrays;
+
+        for (var i = 0, l = node.length; i < l; i++)
+          result.walkValue(i, node[i], walkCallback);
+
+      } else {      
+        nodeTable = result.objects;
+
+        result.walkObject(node, walkCallback);
+      }
+
+      nodeTable.add(node);
     });
 
     result.root_id = result.objects.get_id(root);
@@ -261,6 +287,39 @@
   };
 
 
+  WebasmModule.prototype.walkValue = function (key, value, callback) {
+    switch (typeof (value)) {
+      case "string":
+        callback(key, "s", this.strings, value);
+        break;
+
+      case "number":
+        var i = value | 0;
+        if (i === value)
+          callback(key, "i", null, i);
+        else
+          callback(key, "d", null, value);
+        break;
+
+      case "object":
+        if (value === null)
+          callback(key, "n");
+        else if (Array.isArray(value))
+          callback(key, "a", this.arrays, value);
+        else
+          callback(key, "o", this.objects, value);
+        break;
+
+      case "boolean":
+        callback(key, value ? "t" : "f");
+        break;
+
+      default:
+        throw new Error("Unhandled value type " + typeof (value));
+    }      
+  };
+
+
   WebasmModule.prototype.walkObject = function (node, callback) {
     for (var k in node) {
       if (!node.hasOwnProperty(k))
@@ -268,40 +327,14 @@
 
       var v = node[k];
 
-      switch (typeof (v)) {
-        case "string":
-          callback(k, "s", this.strings, v);
-          break;
-
-        case "number":
-          var i = v | 0;
-          if (i === v)
-            callback(k, "i", null, i);
-          else
-            callback(k, "d", null, v);
-          break;
-
-        case "object":
-          if (v === null)
-            callback(k, "n");
-          else
-            callback(k, "o", this.objects, v);
-          break;
-
-        case "boolean":
-          callback(k, "b", null, v ? 1 : 0);
-          break;
-
-        default:
-          throw new Error("Unhandled value type " + typeof (v));
-      }      
+      this.walkValue(k, v, callback);
     }
   };
 
 
   WebasmModule.prototype.serializeObject = function (result, node) {
     if (Array.isArray(node))
-      return;
+      throw new Error("Should have used serializeArray");
 
     var serialized = Object.create(null);
     var strings = this.strings;
@@ -319,6 +352,32 @@
         }
       }
     });
+
+    var json = JSON.stringify(serialized);
+    serializeUtf8String(result, json);
+  };
+
+
+  WebasmModule.prototype.serializeArray = function (result, node) {
+    if (!Array.isArray(node))
+      throw new Error("Should have used serializeObject");
+
+    var serialized = [];
+
+    var walkCallback = function (key, typeToken, table, value) {
+      if (arguments.length === 2) {
+        serialized.push([typeToken]);
+      } else {
+        if (table) {
+          serialized.push([typeToken, table.get_index(value)]);
+        } else {
+          serialized.push([typeToken, value]);
+        }
+      }
+    };
+
+    for (var i = 0, l = node.length; i < l; i++)
+      this.walkValue(i, node[i], walkCallback);
 
     var json = JSON.stringify(serialized);
     serializeUtf8String(result, json);
@@ -362,7 +421,13 @@
     module.serializeTable(result, module.nodes, module.serializeNode);
     */
 
+    module.strings.finalize();
+    module.arrays .finalize();
+    module.objects.finalize();
+
     module.serializeTable(result, module.strings, serializeUtf8String);
+
+    module.serializeTable(result, module.arrays,  module.serializeArray);
 
     module.serializeTable(result, module.objects, module.serializeObject);
 
