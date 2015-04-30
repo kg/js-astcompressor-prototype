@@ -5,8 +5,8 @@ require('./node-augh.js');
 require('./Upstream/encoding/encoding.js');
 
 var esprima = require('./Upstream/esprima/');
-var escodegen = require('./Upstream/escodegen/');
-var astEncoder = require('./ast-decoder.js');
+var escodegen = require('./Upstream/escodegen/escodegen.browser.js');
+var astDecoder = require('./ast-decoder.js');
 var fs = require('fs');
 
 if (process.argv.length < 4) {

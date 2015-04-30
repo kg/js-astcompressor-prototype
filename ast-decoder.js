@@ -18,5 +18,9 @@
       StringTable = common.StringTable,
       ObjectTable = common.ObjectTable;
 
+  function bytesToModule () {
+    throw new Error("Not implemented");
+  }
 
+  exports.bytesToModule = bytesToModule;
 }));
