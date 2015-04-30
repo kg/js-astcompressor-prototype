@@ -9,6 +9,9 @@
     factory((root.js2webasm = {}));
   }
 }(this, function (exports) {
+  var FormatVersion = 1;
+
+
   function NamedTableId (entry, semantic) {
     this.entry = entry;
     this.semantic = semantic;
@@ -210,11 +213,7 @@
 
   function WebasmModule () {
     this.strings     = new StringTable("String");
-    // HACK: Just one global stringtable for now
-    /*
-    this.identifiers = new StringTable("Identifier");
-    this.nodeTypes   = new StringTable("NodeType");
-    */
+    this.typeNames   = new StringTable("TypeName");
 
     this.arrays      = new ObjectTable("Array");
     this.objects     = new ObjectTable("Object");
@@ -247,8 +246,12 @@
         for (var i = 0, l = node.length; i < l; i++)
           result.walkValue(i, node[i], walkCallback);
 
-      } else {      
+      } else {
         nodeTable = result.objects;
+
+        // HACK: esprima literals duplicate data with a nonstandard 'raw' key
+        if (node.type === "Literal")
+          delete node["raw"];
 
         result.walkObject(node, walkCallback);
       }
@@ -290,7 +293,11 @@
   WebasmModule.prototype.walkValue = function (key, value, callback) {
     switch (typeof (value)) {
       case "string":
-        callback(key, "s", this.strings, value);
+        if (key === "type")
+          callback(key, "t", this.typeNames, value);
+        else
+          callback(key, "s", this.strings, value);
+
         break;
 
       case "number":
@@ -303,7 +310,7 @@
 
       case "object":
         if (value === null)
-          callback(key, "n");
+          callback(key, "N");
         else if (Array.isArray(value))
           callback(key, "a", this.arrays, value);
         else
@@ -311,7 +318,7 @@
         break;
 
       case "boolean":
-        callback(key, value ? "t" : "f");
+        callback(key, value ? "T" : "F");
         break;
 
       default:
@@ -332,29 +339,82 @@
   };
 
 
+  function serializeValue (dataView, offset, typeToken, value) {
+    var typeCode = typeToken.charCodeAt(0) | 0;
+
+    dataView.setUint8(offset, typeCode);
+    offset += 1;
+
+    if ((typeof (value) === "undefined") || (value === null)) {
+    } else if (typeof (value) === "object") {
+      var index = value.get_index();
+      dataView.setUint32(offset, index);
+      offset += 4;
+    } else if (typeof (value) === "number") {
+      if (typeToken === "i") {
+        dataView.setInt32(offset, value);
+        offset += 4;
+      } else {
+        dataView.setFloat64(offset, value);
+        offset += 8;
+      }
+    } else {
+      console.log("Unhandled value [" + typeToken + "]", value);
+    }
+
+    return offset;
+  }
+
+
   WebasmModule.prototype.serializeObject = function (result, node) {
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
-    var serialized = Object.create(null);
     var strings = this.strings;
+    var triplets = [];
 
     this.walkObject(node, function (key, typeToken, table, value) {
       var keyIndex = strings.get_index(key);
 
-      if (arguments.length === 2) {
-        serialized[keyIndex] = [typeToken];
+      if (table) {
+        var id = table.get_id(value);
+        if (!id)
+          throw new Error("Value not interned: " + value);
+        else if (typeof (id.get_index()) !== "number")
+          throw new Error("Value has no index: " + value);
+
+        triplets.push([keyIndex, typeToken, id]);
       } else {
-        if (table) {
-          serialized[keyIndex] = [typeToken, table.get_index(value)];
-        } else {
-          serialized[keyIndex] = [typeToken, value];
-        }
+        triplets.push([keyIndex, typeToken, value]);
       }
     });
 
-    var json = JSON.stringify(serialized);
-    serializeUtf8String(result, json);
+    var countBytes = new Uint8Array(4);    
+    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, triplets.length);
+    result.push(countBytes);
+
+    if (triplets.length === 0)
+      return;
+
+    //                   float64  key  tag
+    var tripletMaxSize = 8        + 4  + 1;
+
+    var tripletBytes = new Uint8Array(tripletMaxSize * triplets.length);
+    var tripletView = new DataView(tripletBytes.buffer);
+    for (var i = 0, l = triplets.length, offset = 0; i < l; i++) {
+      var triplet = triplets[i];
+
+      var keyIndex  = triplet[0] | 0;
+      var typeToken = triplet[1];
+      var value     = triplet[2];
+
+      tripletView.setUint32(offset, keyIndex);
+      offset += 4;
+
+      offset = serializeValue(tripletView, offset, typeToken, value);
+    }
+
+    result.push(tripletBytes.slice(0, offset));
   };
 
 
@@ -364,23 +424,38 @@
 
     var serialized = [];
 
+    var countBytes = new Uint8Array(4);    
+    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, node.length);
+    result.push(countBytes);
+
+    if (node.length === 0)
+      return;
+
+    //                float64  tag
+    var pairMaxSize = 8        + 1;
+
+    var pairBytes = new Uint8Array(pairMaxSize * node.length);
+    var pairView = new DataView(pairBytes.buffer);
+    var offset = 0;
+
     var walkCallback = function (key, typeToken, table, value) {
-      if (arguments.length === 2) {
-        serialized.push([typeToken]);
+      if (table) {
+        var id = table.get_id(value);
+        if (!id)
+          throw new Error("Value not interned: " + value);
+        else if (typeof (id.get_index()) !== "number")
+          throw new Error("Value has no index: " + value);
+
+        offset = serializeValue(pairView, offset, typeToken, id);
       } else {
-        if (table) {
-          serialized.push([typeToken, table.get_index(value)]);
-        } else {
-          serialized.push([typeToken, value]);
-        }
+        offset = serializeValue(pairView, offset, typeToken, value);
       }
     };
 
     for (var i = 0, l = node.length; i < l; i++)
       this.walkValue(i, node[i], walkCallback);
 
-    var json = JSON.stringify(serialized);
-    serializeUtf8String(result, json);
+    result.push(pairBytes.slice(0, offset));
   };
 
 
@@ -411,25 +486,24 @@
   // Converts a WebasmModule into a sequence of typed arrays, 
   //  suitable for passing to the Blob constructor.
   function serializeModule (module) {
-    var result = [magic];
+    var versionBytes = new Uint8Array(4);
+    (new DataView(versionBytes.buffer, 0, 4)).setUint32(0, FormatVersion);
+
+    var result = [magic, versionBytes];
 
     /*
-    module.serializeTable(result, module.nodeTypes, serializeUtf8String);
     module.serializeTable(result, module.identifiers, serializeUtf8String);
-    module.serializeTable(result, module.strings, serializeUtf8String);
-
-    module.serializeTable(result, module.nodes, module.serializeNode);
     */
 
-    module.strings.finalize();
-    module.arrays .finalize();
-    module.objects.finalize();
+    module.typeNames.finalize();
+    module.strings  .finalize();
+    module.arrays   .finalize();
+    module.objects  .finalize();
 
-    module.serializeTable(result, module.strings, serializeUtf8String);
-
-    module.serializeTable(result, module.arrays,  module.serializeArray);
-
-    module.serializeTable(result, module.objects, module.serializeObject);
+    module.serializeTable(result, module.typeNames, serializeUtf8String);
+    module.serializeTable(result, module.strings,   serializeUtf8String);
+    module.serializeTable(result, module.objects,   module.serializeObject);
+    module.serializeTable(result, module.arrays,    module.serializeArray);
 
     return result;
   };

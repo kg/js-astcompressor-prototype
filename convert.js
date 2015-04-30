@@ -7,13 +7,14 @@ var esprima = require('./Upstream/esprima/esprima.js');
 var js2webasm = require('./js2webasm.js');
 var fs = require('fs');
 
-if (process.argv.length !== 4) {
-  console.log("USAGE: js2webasm input.js output.webasm");
+if (process.argv.length !== 5) {
+  console.log("USAGE: js2webasm input.js output.webasm astOutput.json");
   process.exit(1);
 }
 
 var inputFile = process.argv[2];
 var outputFile = process.argv[3];
+var outputAstFile = process.argv[4];
 
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
@@ -29,3 +30,5 @@ for (var i = 0; i < segments.length; i++) {
 }
 
 fs.closeSync(fdOut);
+
+fs.writeFileSync(outputAstFile, JSON.stringify(inputAst));
