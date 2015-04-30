@@ -9,8 +9,7 @@
     factory((root.js2webasm = {}));
   }
 }(this, function (exports) {
-  var FormatVersion = 1;
-
+  var FormatVersion = 0.000;
 
   function NamedTableId (entry, semantic) {
     this.entry = entry;
@@ -498,8 +497,8 @@
   // Converts a WebasmModule into a sequence of typed arrays, 
   //  suitable for passing to the Blob constructor.
   function serializeModule (module) {
-    var versionBytes = new Uint8Array(4);
-    (new DataView(versionBytes.buffer, 0, 4)).setUint32(0, FormatVersion);
+    var versionBytes = new Uint8Array(8);
+    (new DataView(versionBytes.buffer, 0, 8)).setFloat64(0, FormatVersion);
 
     var result = [magic, versionBytes];
 
