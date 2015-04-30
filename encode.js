@@ -4,7 +4,7 @@ require('./astutil.js');
 require('./node-augh.js');
 require('./Upstream/encoding/encoding.js');
 
-var esprima = require('./Upstream/esprima/esprima.js');
+var esprima = require('./Upstream/esprima/');
 var astEncoder = require('./ast-encoder.js');
 var fs = require('fs');
 
