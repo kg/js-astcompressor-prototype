@@ -54,7 +54,7 @@
     (function () {
       'use strict';
       global.escodegen = require('/escodegen.js', module);
-      escodegen.browser = true;
+      global.escodegen.browser = true;
     }());
   });
   require.define('/escodegen.js', function (module, exports, __dirname, __filename) {
