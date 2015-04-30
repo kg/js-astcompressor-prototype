@@ -6,7 +6,7 @@
   } else if (typeof exports !== 'undefined') {
     factory(exports);
   } else {
-    factory((root.js2webasm = {}));
+    factory((root.astEncoder = {}));
   }
 }(this, function (exports) {
   var FormatVersion = 0.000;
@@ -214,7 +214,7 @@
   ObjectTable.prototype = Object.create(UniqueTable.prototype);
 
 
-  function WebasmModule () {
+  function JsAstModule () {
     this.strings     = new StringTable("String");
     this.typeNames   = new StringTable("TypeName");
 
@@ -225,9 +225,9 @@
   };
 
 
-  // Converts an esprima ast into a WebasmModule.
+  // Converts an esprima ast into a JsAstModule.
   function astToModule (root) {
-    var result = new WebasmModule();
+    var result = new JsAstModule();
 
     var walkCallback = function (key, typeToken, table, value) {
       if (typeof (key) === "string")
@@ -301,7 +301,7 @@
   };
 
 
-  WebasmModule.prototype.walkValue = function (key, value, callback) {
+  JsAstModule.prototype.walkValue = function (key, value, callback) {
     switch (typeof (value)) {
       case "string":
         if (key === "type")
@@ -338,7 +338,7 @@
   };
 
 
-  WebasmModule.prototype.walkObject = function (node, callback) {
+  JsAstModule.prototype.walkObject = function (node, callback) {
     for (var k in node) {
       if (!node.hasOwnProperty(k))
         continue;
@@ -377,7 +377,7 @@
   }
 
 
-  WebasmModule.prototype.serializeObject = function (result, node) {
+  JsAstModule.prototype.serializeObject = function (result, node) {
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
@@ -429,7 +429,7 @@
   };
 
 
-  WebasmModule.prototype.serializeArray = function (result, node) {
+  JsAstModule.prototype.serializeArray = function (result, node) {
     if (!Array.isArray(node))
       throw new Error("Should have used serializeObject");
 
@@ -470,7 +470,7 @@
   };
 
 
-  WebasmModule.prototype.serializeTable = function (result, table, serializeEntry) {
+  JsAstModule.prototype.serializeTable = function (result, table, serializeEntry) {
     var finalized = table.finalize();
 
     var countBytes = new Uint8Array(4);    
@@ -494,7 +494,7 @@
   ]);
 
 
-  // Converts a WebasmModule into a sequence of typed arrays, 
+  // Converts a JsAstModule into a sequence of typed arrays, 
   //  suitable for passing to the Blob constructor.
   function serializeModule (module) {
     var versionBytes = new Uint8Array(8);

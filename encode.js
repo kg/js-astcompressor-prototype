@@ -4,11 +4,11 @@ require('./astutil.js');
 require('./Upstream/encoding/encoding.js');
 
 var esprima = require('./Upstream/esprima/esprima.js');
-var js2webasm = require('./js2webasm.js');
+var astEncoder = require('./ast-encoder.js');
 var fs = require('fs');
 
 if (process.argv.length < 4) {
-  console.log("USAGE: js2webasm input.js output.webasm [astOutput.json]");
+  console.log("USAGE: encode input.js output.webasm [astOutput.json]");
   process.exit(1);
 }
 
@@ -20,9 +20,9 @@ var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
 var inputAst = esprima.parse(inputJs);
-var outputModule = js2webasm.astToModule(inputAst);
+var outputModule = astEncoder.astToModule(inputAst);
 
-var segments = js2webasm.serializeModule(outputModule);
+var segments = astEncoder.serializeModule(outputModule);
 for (var i = 0; i < segments.length; i++) {
   var segment = segments[i];
   var buffer = new Buffer(segment);
