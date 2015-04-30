@@ -81,15 +81,14 @@ astutil.mutate = function (root, mutator, context) {
 
             context.parent = newRoot;
             context.key = k;
+
             var newValue = astutil.mutate(v, mutator, context);
-            if (typeof (newValue) === "undefined")
+            if (typeof (newValue) === "undefined") {
                 /* do nothing */ ;
-            else if (newValue === null)
-                /* delete */
-                delete newRoot[k];
-            else if (newValue !== v)
+            } else if (newValue !== v) {
                 /* replace */
                 newRoot[k] = newValue;
+            }
         }
 
         return newRoot;

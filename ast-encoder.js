@@ -63,9 +63,11 @@
       } else {
         nodeTable = result.objects;
 
+        /*
         // HACK: esprima literals duplicate data with a nonstandard 'raw' key
         if (node.type === "Literal")
           delete node["raw"];
+        */
 
         result.walkObject(node, walkCallback);
       }
