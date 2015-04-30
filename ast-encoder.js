@@ -98,7 +98,7 @@
 
     var bytes = new Uint8Array(4 + lengthBytes);
 
-    (new DataView(bytes.buffer, 0, 4)).setUint32(0, lengthBytes);
+    (new DataView(bytes.buffer, 0, 4)).setUint32(0, lengthBytes, true);
 
     encoding.UTF8.encode(text, bytes, 4);
 
@@ -198,20 +198,20 @@
   function serializeValue (dataView, offset, typeToken, value) {
     var typeCode = typeToken.charCodeAt(0) | 0;
 
-    dataView.setUint8(offset, typeCode);
+    dataView.setUint8(offset, typeCode, true);
     offset += 1;
 
     if ((typeof (value) === "undefined") || (value === null)) {
     } else if (typeof (value) === "object") {
       var index = value.get_index();
-      dataView.setUint32(offset, index);
+      dataView.setUint32(offset, index, true);
       offset += 4;
     } else if (typeof (value) === "number") {
       if (typeToken === "i") {
-        dataView.setInt32(offset, value);
+        dataView.setInt32(offset, value, true);
         offset += 4;
       } else {
-        dataView.setFloat64(offset, value);
+        dataView.setFloat64(offset, value, true);
         offset += 8;
       }
     } else {
@@ -245,31 +245,30 @@
       }
     });
 
-    var countBytes = new Uint8Array(4);    
-    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, triplets.length);
-    result.push(countBytes);
-
-    if (triplets.length === 0)
-      return;
-
     //                   float64  key  tag
     var tripletMaxSize = 8        + 4  + 1;
 
-    var tripletBytes = new Uint8Array(tripletMaxSize * triplets.length);
+    var tripletBytes = new Uint8Array(8 + tripletMaxSize * triplets.length);
     var tripletView = new DataView(tripletBytes.buffer);
-    for (var i = 0, l = triplets.length, offset = 0; i < l; i++) {
+    var offset = 8;
+
+    tripletView.setUint32(4, triplets.length, true);
+
+    for (var i = 0, l = triplets.length; i < l; i++) {
       var triplet = triplets[i];
 
       var keyIndex  = triplet[0] | 0;
       var typeToken = triplet[1];
       var value     = triplet[2];
 
-      tripletView.setUint32(offset, keyIndex);
+      tripletView.setUint32(offset, keyIndex, true);
       offset += 4;
 
       offset = serializeValue(tripletView, offset, typeToken, value);
     }
 
+    // Write a length header so you can skip the object body
+    tripletView.setUint32(0, offset - 4, true);
     result.push(tripletBytes.slice(0, offset));
   };
 
@@ -280,19 +279,14 @@
 
     var serialized = [];
 
-    var countBytes = new Uint8Array(4);    
-    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, node.length);
-    result.push(countBytes);
-
-    if (node.length === 0)
-      return;
-
     //                float64  tag
     var pairMaxSize = 8        + 1;
 
-    var pairBytes = new Uint8Array(pairMaxSize * node.length);
+    var pairBytes = new Uint8Array(8 + pairMaxSize * node.length);
     var pairView = new DataView(pairBytes.buffer);
-    var offset = 0;
+    var offset = 8;
+
+    pairView.setUint32(4, node.length, true);
 
     var walkCallback = function (key, typeToken, table, value) {
       if (table) {
@@ -311,6 +305,8 @@
     for (var i = 0, l = node.length; i < l; i++)
       this.walkValue(i, node[i], walkCallback);
 
+    // Write a length header so you can skip the array body
+    pairView.setUint32(0, offset - 4, true);
     result.push(pairBytes.slice(0, offset));
   };
 
@@ -319,7 +315,7 @@
     var finalized = table.finalize();
 
     var countBytes = new Uint8Array(4);    
-    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, finalized.length);
+    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, finalized.length, true);
     result.push(countBytes);
 
     for (var i = 0, l = finalized.length; i < l; i++) {
@@ -350,10 +346,21 @@
     module.arrays   .finalize();
     module.objects  .finalize();
 
-    var rootBytes = new Uint8Array(4);
-    (new DataView(rootBytes.buffer, 0, 4)).setUint32(0, module.root_id);
+    var writeUint32 = function (value) {
+      var tempBytes = new Uint8Array(4);
+      (new DataView(tempBytes.buffer, 0, 4)).setUint32(0, value, true);
+      result.push(tempBytes);
+    };
 
-    result.push(rootBytes);
+    writeUint32(module.root_id.get_index());
+
+    // We write out the lengths in advance of the (length-prefixed) tables.
+    // This allows a decoder to preallocate space for all the tables and
+    //  use that to reconstruct relationships in a single pass.
+    writeUint32(module.typeNames.get_count());
+    writeUint32(module.strings.get_count());
+    writeUint32(module.objects.get_count());
+    writeUint32(module.arrays.get_count());
 
     module.serializeTable(result, module.typeNames, serializeUtf8String);
     module.serializeTable(result, module.strings,   serializeUtf8String);

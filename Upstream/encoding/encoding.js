@@ -98,6 +98,9 @@ encoding.makeByteReader = function (bytes, index, count) {
     },
     get_position: function () {
       return position;
+    },
+    skip: function (distance) {
+      position += distance;
     }
   };
 
@@ -128,6 +131,9 @@ encoding.makeCharacterReader = function (str) {
     },
     get_position: function () {
       return position;
+    },
+    skip: function (distance) {
+      position += distance;
     }
   };
 
