@@ -12,19 +12,73 @@
   var FormatVersion = 0.000;
 
   function NamedTableId (entry, semantic) {
+    if (!entry)
+      throw new Error("Id must have an entry");
+
     this.entry = entry;
     this.semantic = semantic;
+    this.isRedirected = false;
+  };
+
+  NamedTableId.prototype.equals = function (rhs) {
+    return this.entry === rhs.entry;
+  };
+
+  NamedTableId.prototype.redirect = function (newEntry) {
+    if (!newEntry)
+      throw new Error("Id must have an entry");
+
+    if (newEntry === this.entry)
+      throw new Error("Already pointing at this entry");
+
+    if (newEntry.isInvalidated)
+      throw new Error("Cannot redirect to an invalidated entry");
+
+    // Maintain a list on the target entry that
+    //  contains all redirected ids that point at it.
+    if (!newEntry.dedupedIds)
+      newEntry.dedupedIds = [];    
+
+    this.entry = newEntry;
+    this.isRedirected = true;
+    newEntry.dedupedIds.push(this);
+  };
+
+  NamedTableId.prototype.checkInvariants = function () {
+    if (this.entry.isInvalidated) {
+      try {
+        var dupe = Object.create(null);
+        for (var k in this.entry) {
+          if (k === "id")
+            continue;
+
+          dupe[k] = this.entry[k];
+        }
+
+        console.log("Invalidated entry", dupe);
+      } catch (ex) {
+        console.log(ex);
+      }
+
+      throw new Error("Invalidated entry");
+    }
   };
 
   NamedTableId.prototype.get_name = function () {
+    this.checkInvariants();
+
     return this.entry.name;
   };
 
   NamedTableId.prototype.get_value = function () {
+    this.checkInvariants();
+
     return this.entry.value;
   };
 
   NamedTableId.prototype.get_index = function () {
+    this.checkInvariants();
+
     return this.entry.index;
   };
 
@@ -44,6 +98,8 @@
   }
 
   NamedTableId.prototype.valueOf = function () {
+    this.checkInvariants();
+
     var index = this.get_index();
     if (typeof (index) !== "number")
       throw new Error("No index assigned yet");
@@ -57,6 +113,8 @@
     this.value = value;
     this.id = new NamedTableId(this, semantic);
     this.index = undefined;
+    this.isInvalidated = false;
+    this.dedupedIds = null;
   };
 
 
@@ -120,13 +178,72 @@
     return this.count;
   };
 
+  NamedTable.prototype.forEach = function (callback) {
+    for (var k in this.entries) {
+      var entry = this.entries[k];
+
+      // Skip over dedupe sources
+      if (entry.name != k)
+        continue;
+
+      callback(entry.id);
+    }
+  };
+
+  // Makes source's table entry a copy of target's.
+  NamedTable.prototype.dedupe = function (source, target) {
+    var sourceEntry, targetEntry;
+
+    if (
+      source instanceof NamedTableId
+    )
+      sourceEntry = source.entry;
+    else
+      sourceEntry = this.entries[source];
+
+    if (
+      target instanceof NamedTableId
+    )
+      targetEntry = target.entry;
+    else
+      targetEntry = this.entries[target];
+
+    if (!sourceEntry)
+      throw new Error("source must exist");
+    else if (!targetEntry)
+      throw new Error("target must exist");
+
+    // Invalidate the entry.
+    sourceEntry.isInvalidated = true;
+    // Deduped entries aren't counted or iterated by forEach
+    this.count -= 1;
+
+    // If this entry has redirected ids pointing at it,
+    //  point them at the target entry.
+    if (sourceEntry.dedupedIds && sourceEntry.dedupedIds.length) {
+      for (var i = 0, l = sourceEntry.dedupedIds.length; i < l; i++) {
+        var id = sourceEntry.dedupedIds[i];
+        id.redirect(targetEntry);
+      }
+
+      sourceEntry.dedupedIds = null;
+    }
+
+    sourceEntry.id.redirect(targetEntry);
+
+    this.entries[sourceEntry.name] = targetEntry;
+  };
+
   NamedTable.prototype.finalize = function () {
     var result = new Array(this.count);
     var i = 0;
 
-    for (var k in this.entries) {
-      result[i++] = this.entries[k].id;
-    }
+    this.forEach(function (id) {
+      result[i++] = id;
+    });
+
+    if (i !== this.count)
+      throw new Error("Count mismatch");
 
     if (this.isFinalized)
       return result;
@@ -187,6 +304,23 @@
     return NamedTable.prototype.get_index.call(this, name);
   };
 
+  // Makes source's table entry a copy of target's.
+  UniqueTable.prototype.dedupe = function (source, target) {
+    var sourceName, targetName;
+    
+    if (source instanceof NamedTableId)
+      sourceName = source;
+    else
+      sourceName = this.nameFromValue(source);
+
+    if (target instanceof NamedTableId)
+      targetName = target;
+    else
+      targetName = this.nameFromValue(target);
+
+    return NamedTable.prototype.dedupe.call(this, sourceName, targetName);
+  };
+
 
   function StringTable (semantic) {
     UniqueTable.call(this, function (s) {
@@ -229,7 +363,7 @@
   function astToModule (root) {
     var result = new JsAstModule();
 
-    var walkCallback = function (key, typeToken, table, value) {
+    var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
       if (typeof (key) === "string")
         result.strings.add(key);
 
@@ -298,6 +432,46 @@
     encoding.UTF8.encode(text, bytes, 4);
 
     result.push(bytes);
+  };
+
+
+  JsAstModule.prototype.deduplicateObjects = function () {
+    var objects = this.objects;
+    var count = 0, originalCount = objects.count;
+    var lookupTable = Object.create(null);
+
+    objects.forEach(function deduplicateObjects_callback (id) {
+      // FIXME: This is a gross hack where we do deduplication
+      //  based on JSON-serializing the object and using that to
+      //  find duplicates.
+      // A tree-walking comparison or something would probably be better.
+      // The main problem with this current approach is that the stringify
+      //  ends up walking over child nodes many, many times because it has
+      //  to stringify the whole tree from the root and do so each time it
+      //  walks down the tree.
+      // An approach where we walk up from the leaves to the root deduplicating
+      //  would be much faster.
+
+      var obj = id.get_value();
+      var objJson = JSON.stringify(obj);
+
+      var existing = lookupTable[objJson];
+
+      if (existing && existing.equals(id)) {
+        // Do nothing
+      } else if (existing) {
+        count += 1;
+        objects.dedupe(id, existing);
+      } else {
+        lookupTable[objJson] = id;
+      }
+    });
+
+    // We shouldn't need more than one pass since we were doing structural 
+    //  deduplication - all possibly deduplicated objects should get caught
+    //  in the first pass by looking at structure instead of for matching IDs
+
+    console.log("Deduped " + count + " object(s) (" + (count / originalCount * 100.0).toFixed(1) + "%)");
   };
 
 
@@ -384,7 +558,7 @@
     var strings = this.strings;
     var triplets = [];
 
-    this.walkObject(node, function (key, typeToken, table, value) {
+    this.walkObject(node, function serializeObject_walkCallback (key, typeToken, table, value) {
       var keyIndex = strings.get_index(key);
 
       if (table) {
@@ -505,6 +679,8 @@
     /*
     module.serializeTable(result, module.identifiers, serializeUtf8String);
     */
+
+    module.deduplicateObjects();
 
     module.typeNames.finalize();
     module.strings  .finalize();
