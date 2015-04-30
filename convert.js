@@ -1,7 +1,7 @@
 #!/usr/bin/nodejs --harmony-collections
 
 require('./astutil.js');
-require('./encoding.js');
+require('./Upstream/encoding/encoding.js');
 
 var esprima = require('./Upstream/esprima/esprima.js');
 var js2webasm = require('./js2webasm.js');
