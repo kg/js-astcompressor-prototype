@@ -132,6 +132,10 @@
     if (this.isFinalized)
       return result;
 
+    // TODO: Maintain a hit count for each entry,
+    //  sort by hit count descending, so that most used
+    //  entries are first.
+    // Then apply an efficient variable-length index encoding.
     result.sort(function (_lhs, _rhs) {
       var lhs = _lhs.get_name();
       var rhs = _rhs.get_name();
@@ -240,6 +244,14 @@
 
       var nodeTable;
 
+      // TODO: Dedupe objects and arrays somehow?
+      // The AST will never contain a cycle, and once decoded
+      //  it isn't going to get mutated in-place, so instances 
+      //  sharing is fine.
+      // Many literals, subtrees, zero-element arrays and such are 
+      //  probably frequently reused.
+      // If done properly this could collapse common subtrees into
+      //  a single table reference.
       if (Array.isArray(node)) {
         nodeTable = result.arrays;
 
