@@ -298,35 +298,29 @@
   };
 
 
-  function serializeValue (dataView, offset, typeToken, value) {
+  function serializeValue (writer, typeToken, value) {
     var typeCode = typeToken.charCodeAt(0) | 0;
 
-    dataView.setUint8(offset, typeCode, true);
-    offset += 1;
+    writer.writeByte(typeCode);
 
     if ((typeof (value) === "undefined") || (value === null)) {
     } else if (typeof (value) === "object") {
       var index = value.get_index();
-      dataView.setUint32(offset, index, true);
-      offset += 4;
+      writer.writeUint32(index);
     } else if (typeof (value) === "number") {
       if (typeToken === "i") {
-        dataView.setInt32(offset, value, true);
-        offset += 4;
+        writer.writeInt32(value);
       } else {
-        dataView.setFloat64(offset, value, true);
-        offset += 8;
+        writer.writeFloat64(value);
       }
     } else {
       console.log("Unhandled value [" + typeToken + "]", value);
     }
-
-    return offset;
   }
 
 
   function serializePair (
-    serializeValue, pairView, offset, 
+    writer, serializeValue, 
     key, typeToken, table, value
   ) {
     if (table) {
@@ -336,12 +330,10 @@
       else if (typeof (id.get_index()) !== "number")
         throw new Error("Value has no index: " + value);
 
-      offset = serializeValue(pairView, offset, typeToken, id);
+      serializeValue(writer, typeToken, id);
     } else {
-      offset = serializeValue(pairView, offset, typeToken, value);
+      serializeValue(writer, typeToken, value);
     }
-
-    return offset;
   };
 
 
@@ -358,31 +350,19 @@
       throw new Error("Keyset not in table: " + keysetJson);
     }
 
-    //                float64  tag
-    var pairMaxSize = 8        + 1;
-
-    var pairBytes = new Uint8Array(8 + pairMaxSize * keyset.length);
-    var pairView = new DataView(pairBytes.buffer);
-    var offset = 8;
-
-    pairView.setUint32(4, keysetIndex, true);
+    writer.writeUint32(keysetIndex);
 
     for (var i = 0, l = keyset.length; i < l; i++) {
       var key = keyset[i];
       var value = node[key];
 
       this.walkValue(key, value, function (a, b, c, d) {
-        offset = serializePair(
-          serializeValue, pairView, offset,
+        serializePair(
+          writer, serializeValue,
           a, b, c, d
         );
       });
     }
-
-    // Write a length header so you can skip the array body
-    pairView.setUint32(0, offset - 4, true);
-    
-    writer.writeBytes(pairBytes, 0, offset);
   };
 
 
@@ -390,28 +370,16 @@
     if (!Array.isArray(node))
       throw new Error("Should have used serializeObject");
 
-    //                float64  tag
-    var pairMaxSize = 8        + 1;
-
-    var pairBytes = new Uint8Array(8 + pairMaxSize * node.length);
-    var pairView = new DataView(pairBytes.buffer);
-    var offset = 8;
-
-    pairView.setUint32(4, node.length, true);
+    writer.writeUint32(node.length);
 
     for (var i = 0, l = node.length; i < l; i++) {
       this.walkValue(i, node[i], function (a, b, c, d) {
-        offset = serializePair(
-          serializeValue, pairView, offset,
+        serializePair(
+          writer, serializeValue,
           a, b, c, d
         );
       });
     }
-
-    // Write a length header so you can skip the array body
-    pairView.setUint32(0, offset - 4, true);
-
-    writer.writeBytes(pairBytes, 0, offset);
   };
 
 

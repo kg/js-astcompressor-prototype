@@ -147,10 +147,6 @@
 
 
   function deserializeArrayContents (reader, module, arr) {
-    var bodySizeBytes = reader.readUint32();
-    if (bodySizeBytes === false)
-      throw new Error("Truncated file");
-
     var count = reader.readUint32();
 
     for (var i = 0; i < count; i++) {
@@ -161,10 +157,6 @@
 
 
   function deserializeObjectContents (reader, module, obj) {
-    var bodySizeBytes = reader.readUint32();
-    if (bodySizeBytes === false)
-      throw new Error("Truncated file");
-
     var keysetIndex = reader.readUint32();    
     var keyset = module.keysets[keysetIndex];
 
