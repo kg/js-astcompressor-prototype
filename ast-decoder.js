@@ -95,8 +95,8 @@
 
 
   function JsAstModule () {
-    this.keys    = null;
     this.strings = null;
+    this.keysets = null;
     this.arrays  = null;
     this.objects = null;
 
@@ -161,13 +161,12 @@
     if (bodySizeBytes === false)
       throw new Error("Truncated file");
 
-    var count = reader.readUint32();
+    var keysetIndex = reader.readUint32();    
+    var keyset = module.keysets[keysetIndex];
 
-    for (var i = 0; i < count; i++) {
-      var keyIndex = reader.readUint32();
+    for (var i = 0, l = keyset.length; i < l; i++) {
+      var key = keyset[i];
       var value = deserializeValue(reader, module);
-
-      var key = module.keys[keyIndex];
       obj[key] = value;
     }
   };
@@ -231,8 +230,8 @@
 
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
-    var keyCount    = reader.readUint32();
     var stringCount = reader.readUint32();
+    var keysetCount = reader.readUint32();
     var objectCount = reader.readUint32();
     var arrayCount  = reader.readUint32();
 
@@ -242,14 +241,23 @@
         throw new Error("Truncated file");
       return text;
     };
+    var readKeyset = function (reader) {
+      var json = readUtf8String(reader);
+      var result = JSON.parse(json);
+      result.sort();
+      return result;
+    };
     var readDehydratedObject = function (reader) { 
       return new Object(); 
     };
 
     console.time("  read string tables");
-    result.keys    = deserializeTable(reader, readUtf8String);
     result.strings = deserializeTable(reader, readUtf8String);
     console.timeEnd("  read string tables");
+
+    console.time("  read keysets");
+    result.keysets = deserializeTable(reader, readKeyset);
+    console.timeEnd("  read keysets");
 
     // Pre-allocate the objects and arrays for given IDs
     //  so that we can reconstruct relationships in one pass.

@@ -355,7 +355,7 @@
     0x0D, 0x0A, 0x1A, 0x0A
   ]);
 
-  exports.FormatName = "estree-compressed-v1";
+  exports.FormatName = "estree-compressed-v2";
 
 
   exports.NamedTable  = NamedTable;

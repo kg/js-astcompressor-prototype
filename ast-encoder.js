@@ -19,10 +19,11 @@
 
   function JsAstModule () {
     this.strings = new StringTable("String");
-    this.keys    = new StringTable("Key");
 
-    this.arrays      = new ObjectTable("Array");
-    this.objects     = new ObjectTable("Object");
+    this.keysets = new NamedTable("Keyset");
+
+    this.arrays  = new ObjectTable("Array");
+    this.objects = new ObjectTable("Object");
 
     this.root_id     = null;
   };
@@ -33,9 +34,6 @@
     var result = new JsAstModule();
 
     var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
-      if (typeof (key) === "string")
-        result.keys.add(key);
-
       if (table)
         table.add(value);
     };
@@ -53,6 +51,14 @@
           result.walkValue(i, node[i], walkCallback);
 
       } else {
+        var keyset = Object.keys(node);
+        keyset.sort();
+        var keysetJson = JSON.stringify(keyset);
+
+        if (!result.keysets.get(keysetJson)) {
+          result.keysets.add(keysetJson, keyset);
+        }
+
         nodeTable = result.objects;
 
         result.walkObject(node, walkCallback);
@@ -89,6 +95,12 @@
     encoding.UTF8.encode(text, bytes, 4);
 
     result.push(bytes);
+  };
+
+
+  function serializeKeyset (result, keyset) {
+    var json = JSON.stringify(keyset);
+    serializeUtf8String(result, json);
   };
 
 
@@ -262,62 +274,69 @@
   }
 
 
+  function serializePair (
+    serializeValue, pairView, offset, 
+    key, typeToken, table, value
+  ) {
+    if (table) {
+      var id = table.get_id(value);
+      if (!id)
+        throw new Error("Value not interned: " + value);
+      else if (typeof (id.get_index()) !== "number")
+        throw new Error("Value has no index: " + value);
+
+      offset = serializeValue(pairView, offset, typeToken, id);
+    } else {
+      offset = serializeValue(pairView, offset, typeToken, value);
+    }
+
+    return offset;
+  };
+
+
   JsAstModule.prototype.serializeObject = function (result, node) {
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
-    var keys = this.keys;
-    var triplets = [];
+    var keyset = Object.keys(node);
+    keyset.sort();
+    var keysetJson = JSON.stringify(keyset);
 
-    this.walkObject(node, function serializeObject_walkCallback (key, typeToken, table, value) {
-      var keyIndex = keys.get_index(key);
-
-      if (table) {
-        var id = table.get_id(value);
-        if (!id)
-          throw new Error("Value not interned: " + value);
-        else if (typeof (id.get_index()) !== "number")
-          throw new Error("Value has no index: " + value);
-
-        triplets.push([keyIndex, typeToken, id]);
-      } else {
-        triplets.push([keyIndex, typeToken, value]);
-      }
-    });
-
-    //                   float64  key  tag
-    var tripletMaxSize = 8        + 4  + 1;
-
-    var tripletBytes = new Uint8Array(8 + tripletMaxSize * triplets.length);
-    var tripletView = new DataView(tripletBytes.buffer);
-    var offset = 8;
-
-    tripletView.setUint32(4, triplets.length, true);
-
-    for (var i = 0, l = triplets.length; i < l; i++) {
-      var triplet = triplets[i];
-
-      var keyIndex  = triplet[0] | 0;
-      var typeToken = triplet[1];
-      var value     = triplet[2];
-
-      tripletView.setUint32(offset, keyIndex, true);
-      offset += 4;
-
-      offset = serializeValue(tripletView, offset, typeToken, value);
+    var keysetIndex = this.keysets.get_index(keysetJson);
+    if (typeof (keysetIndex) === "undefined") {
+      throw new Error("Keyset not in table: " + keysetJson);
     }
 
-    // Write a length header so you can skip the object body
-    tripletView.setUint32(0, offset - 4, true);
-    result.push(tripletBytes.slice(0, offset));
+    //                float64  tag
+    var pairMaxSize = 8        + 1;
+
+    var pairBytes = new Uint8Array(8 + pairMaxSize * keyset.length);
+    var pairView = new DataView(pairBytes.buffer);
+    var offset = 8;
+
+    pairView.setUint32(4, keysetIndex, true);
+
+    for (var i = 0, l = keyset.length; i < l; i++) {
+      var key = keyset[i];
+      var value = node[key];
+
+      this.walkValue(key, value, function (a, b, c, d) {
+        offset = serializePair(
+          serializeValue, pairView, offset,
+          a, b, c, d
+        );
+      });
+    }
+
+    // Write a length header so you can skip the array body
+    pairView.setUint32(0, offset - 4, true);
+    result.push(pairBytes.slice(0, offset));
   };
 
 
   JsAstModule.prototype.serializeArray = function (result, node) {
     if (!Array.isArray(node))
       throw new Error("Should have used serializeObject");
-
-    var serialized = [];
 
     //                float64  tag
     var pairMaxSize = 8        + 1;
@@ -328,22 +347,14 @@
 
     pairView.setUint32(4, node.length, true);
 
-    var walkCallback = function (key, typeToken, table, value) {
-      if (table) {
-        var id = table.get_id(value);
-        if (!id)
-          throw new Error("Value not interned: " + value);
-        else if (typeof (id.get_index()) !== "number")
-          throw new Error("Value has no index: " + value);
-
-        offset = serializeValue(pairView, offset, typeToken, id);
-      } else {
-        offset = serializeValue(pairView, offset, typeToken, value);
-      }
-    };
-
-    for (var i = 0, l = node.length; i < l; i++)
-      this.walkValue(i, node[i], walkCallback);
+    for (var i = 0, l = node.length; i < l; i++) {
+      this.walkValue(i, node[i], function (a, b, c, d) {
+        offset = serializePair(
+          serializeValue, pairView, offset,
+          a, b, c, d
+        );
+      });
+    }
 
     // Write a length header so you can skip the array body
     pairView.setUint32(0, offset - 4, true);
@@ -379,8 +390,9 @@
     module.serializeTable(result, module.identifiers, serializeUtf8String);
     */
 
-    module.keys   .finalize();
     module.strings.finalize();
+    module.keysets.finalize();
+
     module.arrays .finalize();
     module.objects.finalize();
 
@@ -395,13 +407,13 @@
     // We write out the lengths in advance of the (length-prefixed) tables.
     // This allows a decoder to preallocate space for all the tables and
     //  use that to reconstruct relationships in a single pass.
-    writeUint32(module.keys.get_count());
     writeUint32(module.strings.get_count());
+    writeUint32(module.keysets.get_count());
     writeUint32(module.objects.get_count());
     writeUint32(module.arrays.get_count());
 
-    module.serializeTable(result, module.keys,    serializeUtf8String);
     module.serializeTable(result, module.strings, serializeUtf8String);
+    module.serializeTable(result, module.keysets, serializeKeyset);
     module.serializeTable(result, module.objects, module.serializeObject);
     module.serializeTable(result, module.arrays,  module.serializeArray);
 
