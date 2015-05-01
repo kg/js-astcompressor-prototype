@@ -1,4 +1,4 @@
-#!/usr/bin/nodejs --harmony-collections
+#!/usr/bin/node
 
 require('./astutil.js');
 require('./node-augh.js');

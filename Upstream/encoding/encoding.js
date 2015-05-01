@@ -1,4 +1,7 @@
-/// ganked from JSIL.Bootstrap.Text.js
+/// portions ganked from JSIL.Bootstrap.Text.js (see JSIL_LICENSE)
+/// utf8 decode/encode partially based on tidy (see TIDY_LICENSE)
+/// fromCharCode / charCodeAt based on MDN reference implementations,
+///  (MIT license due to predating Aug 20, 2010), (see MDN_LICENSE)
 
 encoding = Object.create(null);
 encoding.UTF8 = Object.create(null);
@@ -40,6 +43,8 @@ encoding.charCodeAt = function fixedCharCodeAt (str, idx) {
 
   return code;  
 };
+
+
 
 
 encoding.makeByteWriter = function (outputBytes, outputIndex) {
