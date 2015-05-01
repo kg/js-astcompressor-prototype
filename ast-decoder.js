@@ -67,6 +67,10 @@
     return this.scratchView.getInt32(0, true);
   };
 
+  ValueReader.prototype.readVarUint32 = function () {
+    return common.readLEBUint32(this.byteReader);
+  };
+
   ValueReader.prototype.readFloat64 = function () {
     if (!this.readScratchBytes(8))
       return false;
@@ -217,12 +221,15 @@
 
     var magic = reader.readBytes(common.Magic.length);
     if (JSON.stringify(magic) !== JSON.stringify(common.Magic)) {
+      console.log(magic, common.Magic);
       throw new Error("Magic header does not match");
     }
 
     var formatName = reader.readUtf8String();
-    if (formatName !== common.FormatName)
+    if (formatName !== common.FormatName) {
+      console.log(formatName, common.FormatName);
       throw new Error("Format name does not match");
+    }
 
     var result = new JsAstModule();
 

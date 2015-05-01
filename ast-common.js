@@ -9,6 +9,8 @@
     factory((root.astCommon = {}));
   }
 }(this, function (exports) {
+  var leb    = require("./Upstream/leb/leb.js");
+
   function NamedTableId (entry, semantic) {
     if (!entry)
       throw new Error("Id must have an entry");
@@ -111,6 +113,7 @@
     this.value = value;
     this.id = new NamedTableId(this, semantic);
     this.index = undefined;
+    this.hitCount = 1;
     this.isInvalidated = false;
     this.dedupedIds = null;
   };
@@ -123,17 +126,21 @@
     this.isFinalized = false;
   };
 
-  NamedTable.prototype.add = function (name, value) {
+  NamedTable.prototype.add = function (name, value, throwOnDivergence) {
     if (this.isFinalized)
       throw new Error("Table already finalized");
 
     var existing = this.entries[name];
 
     if (typeof (existing) !== "undefined") {
-      if (existing.value !== value)
+      if (
+        (throwOnDivergence !== false) &&
+        (existing.value !== value)
+      )
         throw new Error("A different value already exists with this name");
-      else
-        return existing.id;
+
+      existing.hitCount += 1;
+      return existing.id;
     }
 
     var entry = new NamedTableEntry(name, value, this.semantic);
@@ -232,7 +239,7 @@
     this.entries[sourceEntry.name] = targetEntry;
   };
 
-  NamedTable.prototype.finalize = function () {
+  NamedTable.prototype.finalize = function (ordered) {
     var result = new Array(this.count);
     var i = 0;
 
@@ -242,6 +249,15 @@
 
     if (i !== this.count)
       throw new Error("Count mismatch");
+
+    if (ordered) {
+      result.sort(function (lhs, rhs) {
+        var lhsHitCount = lhs.entry.hitCount;
+        var rhsHitCount = rhs.entry.hitCount;
+
+        return (rhsHitCount - lhsHitCount);
+      });
+    }
 
     if (this.isFinalized)
       return result;
@@ -349,13 +365,68 @@
   ObjectTable.prototype = Object.create(UniqueTable.prototype);
 
 
+  // FIXME: leb.js is gross and slow and node-only. Kill it.
+
+  function writeLEBUint32 (byteWriter, value) {
+    var tempUint32 = new Uint32Array(1);
+    tempUint32[0] = value;
+    var tempUintBytes = new Uint8Array(tempUint32.buffer);
+
+    var encodedBuffer = leb.encodeUIntBuffer(tempUintBytes);
+    
+    for (var i = 0; i < encodedBuffer.length; i++)
+      byteWriter.write(encodedBuffer[i]);
+  }
+
+
+  function readLEBUint32 (byteReader) {
+    var buf = new Buffer(8);
+
+    // FIXME: eof
+    var numRead = 0;
+    for (var i = 0; i < buf.length; i++) {
+      var b = byteReader.read();
+      if (b === false) {
+        break;
+      } else {
+        numRead += 1;
+      }
+
+      buf[i] = b;
+    }
+
+    if (numRead === 0)
+      return false;
+
+    byteReader.skip(-numRead);
+
+    var decoded = leb.decodeUIntBuffer(buf, 0);
+
+    var distance = decoded.nextIndex;
+    byteReader.skip(distance);
+
+    var tempBytes = new Uint8Array(4);
+    // Round size up to 4 bytes
+    for (var i = 0; i < decoded.value.length; i++)
+      tempBytes[i] = decoded.value[i];
+
+    var tempUint32 = new Uint32Array(tempBytes.buffer);
+
+    return tempUint32[0];
+  }
+
+
+  exports.writeLEBUint32 = writeLEBUint32;
+  exports.readLEBUint32  = readLEBUint32;
+
+
   exports.Magic = new Uint8Array([
     0x89,
     87, 101, 98, 65, 83, 77,
     0x0D, 0x0A, 0x1A, 0x0A
   ]);
 
-  exports.FormatName = "estree-compressed-v2";
+  exports.FormatName = "estree-compressed-v3";
 
 
   exports.NamedTable  = NamedTable;

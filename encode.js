@@ -34,16 +34,14 @@ console.time("deduplicateObjects");
 outputModule.deduplicateObjects();
 console.timeEnd("deduplicateObjects");
 
+// TODO: Deduplicate arrays?
+
 console.time("serializeModule");
-var segments = astEncoder.serializeModule(outputModule);
+var bytes = astEncoder.serializeModule(outputModule);
 console.timeEnd("serializeModule");
 
 console.time("write serialized module");
-for (var i = 0; i < segments.length; i++) {
-  var segment = segments[i];
-  var buffer = new Buffer(segment);
-  fs.writeSync(fdOut, buffer, 0, segment.length);
-}
+fs.writeSync(fdOut, new Buffer(bytes), 0, bytes.length);
 console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);

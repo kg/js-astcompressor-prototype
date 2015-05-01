@@ -17,6 +17,82 @@
       ObjectTable = common.ObjectTable;
 
 
+  function ValueWriter () {
+    // HACK: Max size 32mb because growable buffers are effort
+    var maxSize = (1024 * 1024) * 32;
+
+    this.bytes      = new Uint8Array(maxSize);
+    this.byteWriter = encoding.makeByteWriter(this.bytes, 0);
+
+    this.scratchBytes = new Uint8Array(128);
+    this.scratchView  = new DataView(this.scratchBytes.buffer);
+  }
+
+  ValueWriter.prototype.writeByte = function (b) {
+    this.byteWriter.write(b);
+  };
+
+  ValueWriter.prototype.writeBytes = function (bytes, offset, count) {
+    if (arguments.length === 1) {
+      offset = 0;
+      count = bytes.length | 0;
+    } else if (arguments.length === 3) {
+      offset |= 0;
+      count |= 0;
+    } else {
+      throw new Error("Expected (bytes) or (bytes, offset, count)");
+    }
+
+    for (var i = 0; i < count; i++)
+      this.byteWriter.write(bytes[offset + i]);
+  };
+
+  ValueWriter.prototype.writeScratchBytes = function (count) {
+    this.writeBytes(this.scratchBytes, 0, count);
+  };
+
+  ValueWriter.prototype.writeUint32 = function (value) {
+    this.scratchView.setUint32(0, value, true);
+    this.writeScratchBytes(4);
+  };
+
+  ValueWriter.prototype.writeInt32 = function (value) {
+    this.scratchView.setInt32(0, value, true);
+    this.writeScratchBytes(4);
+  };
+
+  ValueWriter.prototype.writeVarUint32 = function () {
+    common.writeLEBUint32(this.byteWriter);
+  };
+
+  ValueWriter.prototype.writeFloat64 = function (value) {
+    this.scratchView.setFloat64(0, value, true);
+    this.writeScratchBytes(8);
+  };
+
+  ValueWriter.prototype.writeUtf8String = function (text) {
+    var lengthBytes = 0;
+    var counter = {
+      write: function (byte) {
+        lengthBytes += 1;
+      },
+      getResult: function () {
+      }
+    };
+
+    // Encode but discard bytes to compute length
+    encoding.UTF8.encode(text, counter);
+
+    this.writeUint32(lengthBytes);
+    encoding.UTF8.encode(text, this.byteWriter);
+  };
+
+  ValueWriter.prototype.toArray = function () {
+    return this.byteWriter.getResult();
+  };
+
+
+
   function JsAstModule () {
     this.strings = new StringTable("String");
 
@@ -55,9 +131,7 @@
         keyset.sort();
         var keysetJson = JSON.stringify(keyset);
 
-        if (!result.keysets.get(keysetJson)) {
-          result.keysets.add(keysetJson, keyset);
-        }
+        result.keysets.add(keysetJson, keyset, false);
 
         nodeTable = result.objects;
 
@@ -73,34 +147,11 @@
   };
 
 
-  function serializeUtf8String (result, text) {
-    // UGH
-
-    var lengthBytes = 0;
-    var counter = {
-      write: function (byte) {
-        lengthBytes += 1;
-      },
-      getResult: function () {
-      }
-    };
-
-    // Encode but discard bytes to compute length
-    encoding.UTF8.encode(text, counter);
-
-    var bytes = new Uint8Array(4 + lengthBytes);
-
-    (new DataView(bytes.buffer, 0, 4)).setUint32(0, lengthBytes, true);
-
-    encoding.UTF8.encode(text, bytes, 4);
-
-    result.push(bytes);
-  };
-
-
-  function serializeKeyset (result, keyset) {
+  function serializeKeyset (writer, keyset) {
+    // FIXME: Store as series of stringtable indices?
+    //  Doesn't matter if we end up with small # of keysets, ultimately.
     var json = JSON.stringify(keyset);
-    serializeUtf8String(result, json);
+    writer.writeUtf8String(json);
   };
 
 
@@ -294,7 +345,7 @@
   };
 
 
-  JsAstModule.prototype.serializeObject = function (result, node) {
+  JsAstModule.prototype.serializeObject = function (writer, node) {
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
@@ -330,11 +381,12 @@
 
     // Write a length header so you can skip the array body
     pairView.setUint32(0, offset - 4, true);
-    result.push(pairBytes.slice(0, offset));
+    
+    writer.writeBytes(pairBytes, 0, offset);
   };
 
 
-  JsAstModule.prototype.serializeArray = function (result, node) {
+  JsAstModule.prototype.serializeArray = function (writer, node) {
     if (!Array.isArray(node))
       throw new Error("Should have used serializeObject");
 
@@ -358,66 +410,61 @@
 
     // Write a length header so you can skip the array body
     pairView.setUint32(0, offset - 4, true);
-    result.push(pairBytes.slice(0, offset));
+
+    writer.writeBytes(pairBytes, 0, offset);
   };
 
 
-  JsAstModule.prototype.serializeTable = function (result, table, serializeEntry) {
-    var finalized = table.finalize();
+  JsAstModule.prototype.serializeTable = function (writer, table, ordered, serializeEntry) {
+    var finalized = table.finalize(ordered);
 
-    var countBytes = new Uint8Array(4);    
-    (new DataView(countBytes.buffer, 0, 4)).setUint32(0, finalized.length, true);
-    result.push(countBytes);
+    writer.writeUint32(finalized.length);
 
     for (var i = 0, l = finalized.length; i < l; i++) {
       var id = finalized[i];
       var value = id.get_value();
 
       // gross
-      serializeEntry.call(this, result, value);
+      serializeEntry.call(this, writer, value);
     }
   };
 
 
-  // Converts a JsAstModule into a sequence of typed arrays, 
-  //  suitable for passing to the Blob constructor.
-  function serializeModule (module) {
-    var result = [common.Magic];
+  // Converts a JsAstModule into bytes and writes them into byteWriter.
+  function serializeModule (module, byteWriter) {
+    var writer = new ValueWriter();
 
-    serializeUtf8String(result, common.FormatName);
+    writer.writeBytes(common.Magic);
+    writer.writeUtf8String(common.FormatName);
 
     /*
-    module.serializeTable(result, module.identifiers, serializeUtf8String);
+    module.serializeTable(writer, module.identifiers, serializeUtf8String);
     */
 
-    module.strings.finalize();
-    module.keysets.finalize();
+    module.strings.finalize(true);
+    module.keysets.finalize(true);
 
-    module.arrays .finalize();
-    module.objects.finalize();
+    module.arrays .finalize(true);
+    module.objects.finalize(true);
 
-    var writeUint32 = function (value) {
-      var tempBytes = new Uint8Array(4);
-      (new DataView(tempBytes.buffer, 0, 4)).setUint32(0, value, true);
-      result.push(tempBytes);
-    };
-
-    writeUint32(module.root_id.get_index());
+    writer.writeUint32(module.root_id.get_index());
 
     // We write out the lengths in advance of the (length-prefixed) tables.
     // This allows a decoder to preallocate space for all the tables and
     //  use that to reconstruct relationships in a single pass.
-    writeUint32(module.strings.get_count());
-    writeUint32(module.keysets.get_count());
-    writeUint32(module.objects.get_count());
-    writeUint32(module.arrays.get_count());
+    writer.writeUint32(module.strings.get_count());
+    writer.writeUint32(module.keysets.get_count());
+    writer.writeUint32(module.objects.get_count());
+    writer.writeUint32(module.arrays.get_count());
 
-    module.serializeTable(result, module.strings, serializeUtf8String);
-    module.serializeTable(result, module.keysets, serializeKeyset);
-    module.serializeTable(result, module.objects, module.serializeObject);
-    module.serializeTable(result, module.arrays,  module.serializeArray);
+    module.serializeTable(writer, module.strings, true,  function (writer, value) {
+      writer.writeUtf8String(value);
+    });
+    module.serializeTable(writer, module.keysets, true,  serializeKeyset);
+    module.serializeTable(writer, module.objects, true,  module.serializeObject);
+    module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
 
-    return result;
+    return writer.toArray();
   };
 
 
