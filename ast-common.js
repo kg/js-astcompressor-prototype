@@ -250,6 +250,8 @@
     //  sort by hit count descending, so that most used
     //  entries are first.
     // Then apply an efficient variable-length index encoding.
+    // FIXME: This seems to break serialization somehow...
+    /*
     result.sort(function (_lhs, _rhs) {
       var lhs = _lhs.get_name();
       var rhs = _rhs.get_name();
@@ -261,6 +263,7 @@
       else
         return 0;
     });
+    */
 
     for (i = 0; i < result.length; i++)
       result[i].entry.index = i;

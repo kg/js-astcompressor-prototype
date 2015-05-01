@@ -18,8 +18,8 @@
 
 
   function JsAstModule () {
-    this.strings     = new StringTable("String");
-    this.typeNames   = new StringTable("TypeName");
+    this.strings = new StringTable("String");
+    this.keys    = new StringTable("Key");
 
     this.arrays      = new ObjectTable("Array");
     this.objects     = new ObjectTable("Object");
@@ -34,7 +34,7 @@
 
     var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
       if (typeof (key) === "string")
-        result.strings.add(key);
+        result.keys.add(key);
 
       if (table)
         table.add(value);
@@ -149,11 +149,7 @@
   JsAstModule.prototype.walkValue = function (key, value, callback) {
     switch (typeof (value)) {
       case "string":
-        if (key === "type")
-          callback(key, "t", this.typeNames, value);
-        else
-          callback(key, "s", this.strings, value);
-
+        callback(key, "s", this.strings, value);
         break;
 
       case "number":
@@ -226,11 +222,11 @@
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
-    var strings = this.strings;
+    var keys = this.keys;
     var triplets = [];
 
     this.walkObject(node, function serializeObject_walkCallback (key, typeToken, table, value) {
-      var keyIndex = strings.get_index(key);
+      var keyIndex = keys.get_index(key);
 
       if (table) {
         var id = table.get_id(value);
@@ -341,10 +337,10 @@
 
     module.deduplicateObjects();
 
-    module.typeNames.finalize();
-    module.strings  .finalize();
-    module.arrays   .finalize();
-    module.objects  .finalize();
+    module.keys   .finalize();
+    module.strings.finalize();
+    module.arrays .finalize();
+    module.objects.finalize();
 
     var writeUint32 = function (value) {
       var tempBytes = new Uint8Array(4);
@@ -357,15 +353,15 @@
     // We write out the lengths in advance of the (length-prefixed) tables.
     // This allows a decoder to preallocate space for all the tables and
     //  use that to reconstruct relationships in a single pass.
-    writeUint32(module.typeNames.get_count());
+    writeUint32(module.keys.get_count());
     writeUint32(module.strings.get_count());
     writeUint32(module.objects.get_count());
     writeUint32(module.arrays.get_count());
 
-    module.serializeTable(result, module.typeNames, serializeUtf8String);
-    module.serializeTable(result, module.strings,   serializeUtf8String);
-    module.serializeTable(result, module.objects,   module.serializeObject);
-    module.serializeTable(result, module.arrays,    module.serializeArray);
+    module.serializeTable(result, module.keys,    serializeUtf8String);
+    module.serializeTable(result, module.strings, serializeUtf8String);
+    module.serializeTable(result, module.objects, module.serializeObject);
+    module.serializeTable(result, module.arrays,  module.serializeArray);
 
     return result;
   };

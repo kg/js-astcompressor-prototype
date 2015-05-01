@@ -95,22 +95,65 @@
 
 
   function JsAstModule () {
-    this.typeNames = null;
-    this.strings   = null;
-    this.arrays    = null;
-    this.objects   = null;
+    this.keys    = null;
+    this.strings = null;
+    this.arrays  = null;
+    this.objects = null;
 
-    this.root_id   = null;
+    this.root_id = null;
   };
 
 
-  function deserializeArrayContents (reader, module, obj) {
+  function deserializeValue (reader, module) {
+    var typeCode = reader.readByte();
+    if (typeCode === false)
+      throw new Error("Truncated file");
+
+    var typeToken = String.fromCharCode(typeCode);
+
+    switch (typeToken) {
+      case "s":
+        return module.strings[reader.readUint32()];
+
+      case "i":
+        return reader.readInt32();
+
+      case "d":
+        return reader.readFloat64();
+
+      case "N":
+        return null;
+
+      case "a":
+        return module.arrays[reader.readUint32()];
+
+      case "o":
+        return module.objects[reader.readUint32()];
+
+      case "T":
+        return true;
+
+      case "F":
+        return false;
+
+      default:
+        throw new Error("Unhandled value type " + typeToken);
+    }
+  };
+
+
+  function deserializeArrayContents (reader, module, arr) {
     var bodySizeBytes = reader.readUint32();
     if (bodySizeBytes === false)
       throw new Error("Truncated file");
 
-    reader.skip(bodySizeBytes);
-  }
+    var count = reader.readUint32();
+
+    for (var i = 0; i < count; i++) {
+      var value = deserializeValue(reader, module);
+      arr[i] = value;
+    }
+  };
 
 
   function deserializeObjectContents (reader, module, obj) {
@@ -118,8 +161,16 @@
     if (bodySizeBytes === false)
       throw new Error("Truncated file");
 
-    reader.skip(bodySizeBytes);
-  }
+    var count = reader.readUint32();
+
+    for (var i = 0; i < count; i++) {
+      var keyIndex = reader.readUint32();
+      var value = deserializeValue(reader, module);
+
+      var key = module.keys[keyIndex];
+      obj[key] = value;
+    }
+  };
 
 
   function deserializeTable (reader, payloadReader) {
@@ -174,16 +225,17 @@
     if (formatName !== common.FormatName)
       throw new Error("Format name does not match");
 
-    var rootIndex = reader.readUint32();
+    var result = new JsAstModule();
+
+    result.rootIndex = reader.readUint32();
 
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
-    var typeNameCount = reader.readUint32();
-    var stringCount   = reader.readUint32();
-    var objectCount   = reader.readUint32();
-    var arrayCount    = reader.readUint32();
+    var keyCount    = reader.readUint32();
+    var stringCount = reader.readUint32();
+    var objectCount = reader.readUint32();
+    var arrayCount  = reader.readUint32();
 
-    var result = new JsAstModule();
     var readUtf8String = function (reader) { 
       var text = reader.readUtf8String();
       if (text === false)
@@ -194,8 +246,8 @@
       return new Object(); 
     };
 
-    result.typeNames = deserializeTable(reader, readUtf8String);
-    result.strings   = deserializeTable(reader, readUtf8String);
+    result.keys    = deserializeTable(reader, readUtf8String);
+    result.strings = deserializeTable(reader, readUtf8String);
 
     // Pre-allocate the objects and arrays for given IDs
     //  so that we can reconstruct relationships in one pass.
@@ -216,8 +268,7 @@
 
 
   function moduleToAst (module) {
-    console.log(module);
-    throw new Error("Not implemented");
+    return module.objects[module.rootIndex];
   };
 
 
