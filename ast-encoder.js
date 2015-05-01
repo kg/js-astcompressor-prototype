@@ -46,14 +46,6 @@
 
       var nodeTable;
 
-      // TODO: Dedupe objects and arrays somehow?
-      // The AST will never contain a cycle, and once decoded
-      //  it isn't going to get mutated in-place, so instances 
-      //  sharing is fine.
-      // Many literals, subtrees, zero-element arrays and such are 
-      //  probably frequently reused.
-      // If done properly this could collapse common subtrees into
-      //  a single table reference.
       if (Array.isArray(node)) {
         nodeTable = result.arrays;
 
@@ -62,12 +54,6 @@
 
       } else {
         nodeTable = result.objects;
-
-        /*
-        // HACK: esprima literals duplicate data with a nonstandard 'raw' key
-        if (node.type === "Literal")
-          delete node["raw"];
-        */
 
         result.walkObject(node, walkCallback);
       }
@@ -109,24 +95,82 @@
   JsAstModule.prototype.deduplicateObjects = function () {
     var objects = this.objects;
     var count = 0, originalCount = objects.count;
-    var lookupTable = Object.create(null);
+
+    // Assign temporary unique indices to all observed values
+    var temporaryIndices = new Map();
+    var nextTemporaryIndex = 0;
+    // On first visit to an object generate a content string
+    var contentStrings = new Map();
+    var cycleSentinel = new Object();
+    // Lookup table by content string, for deduping
+    var objectsByContentString = new Map();
+
+    function getTemporaryIndex (value) {
+      var existing = temporaryIndices.get(value);
+      if (!existing)
+        temporaryIndices.set(value, existing = nextTemporaryIndex++);
+
+      return existing;
+    };
+
+    function generateContentString (obj) {
+      var result = "";
+
+      for (var k in obj) {
+        if (!obj.hasOwnProperty(k))
+          continue;
+
+        var v = obj[k];
+
+        if (typeof (v) === "object") {
+          if (v === null) {
+            result += "n";
+          } else {
+            var cs = getContentString(v);
+            result += "[" + cs + "]";
+          }
+        } else {
+          var id = getTemporaryIndex(v);
+          var hexId = id.toString(16);
+
+          if (result !== "")
+            result += " ";
+
+          result += hexId;
+        }
+      }
+
+      return result;
+    };
+
+    function getContentString (obj) {
+      var existing = contentStrings.get(obj);
+
+      if (existing === cycleSentinel) {
+        return getTemporaryIndex(obj);
+      } else if (!existing) {
+        contentStrings.set(obj, cycleSentinel);
+
+        existing = generateContentString(obj);
+
+        contentStrings.set(obj, existing);
+      }
+
+      return existing;
+    };
 
     objects.forEach(function deduplicateObjects_callback (id) {
       // FIXME: This is a gross hack where we do deduplication
-      //  based on JSON-serializing the object and using that to
+      //  based on shallowly serializing the object and using that to
       //  find duplicates.
       // A tree-walking comparison or something would probably be better.
-      // The main problem with this current approach is that the stringify
-      //  ends up walking over child nodes many, many times because it has
-      //  to stringify the whole tree from the root and do so each time it
-      //  walks down the tree.
       // An approach where we walk up from the leaves to the root deduplicating
-      //  would be much faster.
+      //  might be faster.
 
       var obj = id.get_value();
-      var objJson = JSON.stringify(obj);
+      var objCS = getContentString(obj);
 
-      var existing = lookupTable[objJson];
+      var existing = objectsByContentString.get(objCS);
 
       if (existing && existing.equals(id)) {
         // Do nothing
@@ -134,7 +178,7 @@
         count += 1;
         objects.dedupe(id, existing);
       } else {
-        lookupTable[objJson] = id;
+        objectsByContentString.set(objCS, id);
       }
     });
 
@@ -334,8 +378,6 @@
     /*
     module.serializeTable(result, module.identifiers, serializeUtf8String);
     */
-
-    module.deduplicateObjects();
 
     module.keys   .finalize();
     module.strings.finalize();

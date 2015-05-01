@@ -18,18 +18,27 @@ var inputFile = process.argv[2];
 var outputFile = process.argv[3];
 var outputAstFile = process.argv[4];
 
+console.time("read webasm");
 var inputBuffer = fs.readFileSync(inputFile), inputBytes;
 if (inputBuffer.toArrayBuffer)
     inputBytes = inputBuffer.toArrayBuffer;
 else
     inputBytes = new Uint8Array(inputBuffer);
+console.timeEnd("read webasm");
 
+console.time("bytesToModule");
 var inputModule = astDecoder.bytesToModule(inputBytes);
+console.timeEnd("bytesToModule");
+
+console.time("moduleToAst");
 var outputAst = astDecoder.moduleToAst(inputModule);
+console.timeEnd("moduleToAst");
 
 if (outputAstFile)
   fs.writeFileSync(outputAstFile, JSON.stringify(outputAst));
 
+console.time("escodegen generate");
 var outputJs = escodegen.generate(outputAst);
+console.timeEnd("escodegen generate");
 
 fs.writeFileSync(outputFile, outputJs);

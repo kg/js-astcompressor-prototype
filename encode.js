@@ -22,16 +22,29 @@ var expectedOutputJsFile = process.argv[5];
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
+console.time("esprima parse");
 var inputAst = esprima.parse(inputJs);
+console.timeEnd("esprima parse");
 
+console.time("astToModule");
 var outputModule = astEncoder.astToModule(inputAst);
+console.timeEnd("astToModule");
 
+console.time("deduplicateObjects");
+outputModule.deduplicateObjects();
+console.timeEnd("deduplicateObjects");
+
+console.time("serializeModule");
 var segments = astEncoder.serializeModule(outputModule);
+console.timeEnd("serializeModule");
+
+console.time("write serialized module");
 for (var i = 0; i < segments.length; i++) {
   var segment = segments[i];
   var buffer = new Buffer(segment);
   fs.writeSync(fdOut, buffer, 0, segment.length);
 }
+console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);
 
