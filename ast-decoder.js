@@ -68,7 +68,13 @@
   };
 
   ValueReader.prototype.readVarUint32 = function () {
-    return common.readLEBUint32(this.byteReader);
+    if (!common.EnableVarints)
+      return this.readUint32();
+
+    var offset = this.byteReader.get_position();
+    var result = common.readLEBUint32(this.bytes, offset);
+    this.byteReader.skip(result.length);
+    return result.value;
   };
 
   ValueReader.prototype.readFloat64 = function () {
@@ -79,7 +85,7 @@
   };
 
   ValueReader.prototype.readUtf8String = function () {
-    var length = this.readUint32();
+    var length = this.readVarUint32();
     if (length === false)
       return false;
 
@@ -117,7 +123,24 @@
 
     switch (typeToken) {
       case "s":
-        return module.strings[reader.readUint32()];
+      case "a":
+      case "o": {
+        var index = reader.readVarUint32();
+
+        switch (typeToken) {
+          case "s":
+            return module.strings[index];
+
+          case "a":
+            return module.arrays[index];
+
+          case "o":
+            return module.objects[index];
+
+          default:
+            throw new Error("unexpected");            
+        }
+      }
 
       case "i":
         return reader.readInt32();
@@ -127,12 +150,6 @@
 
       case "N":
         return null;
-
-      case "a":
-        return module.arrays[reader.readUint32()];
-
-      case "o":
-        return module.objects[reader.readUint32()];
 
       case "T":
         return true;
@@ -147,7 +164,7 @@
 
 
   function deserializeArrayContents (reader, module, arr) {
-    var count = reader.readUint32();
+    var count = reader.readVarUint32();
 
     for (var i = 0; i < count; i++) {
       var value = deserializeValue(reader, module);
@@ -157,7 +174,7 @@
 
 
   function deserializeObjectContents (reader, module, obj) {
-    var keysetIndex = reader.readUint32();    
+    var keysetIndex = reader.readVarUint32();    
     var keyset = module.keysets[keysetIndex];
 
     for (var i = 0, l = keyset.length; i < l; i++) {

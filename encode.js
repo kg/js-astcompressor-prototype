@@ -30,9 +30,11 @@ console.time("astToModule");
 var outputModule = astEncoder.astToModule(inputAst);
 console.timeEnd("astToModule");
 
-console.time("deduplicateObjects");
-outputModule.deduplicateObjects();
-console.timeEnd("deduplicateObjects");
+if (true) {
+  console.time("deduplicateObjects");
+  outputModule.deduplicateObjects();
+  console.timeEnd("deduplicateObjects");
+}
 
 // TODO: Deduplicate arrays?
 

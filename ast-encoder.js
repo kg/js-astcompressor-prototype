@@ -61,8 +61,11 @@
     this.writeScratchBytes(4);
   };
 
-  ValueWriter.prototype.writeVarUint32 = function () {
-    common.writeLEBUint32(this.byteWriter);
+  ValueWriter.prototype.writeVarUint32 = function (value) {
+    if (common.EnableVarints)
+      common.writeLEBUint32(this.byteWriter, value);
+    else
+      return this.writeUint32(value);
   };
 
   ValueWriter.prototype.writeFloat64 = function (value) {
@@ -83,7 +86,7 @@
     // Encode but discard bytes to compute length
     encoding.UTF8.encode(text, counter);
 
-    this.writeUint32(lengthBytes);
+    this.writeVarUint32(lengthBytes);
     encoding.UTF8.encode(text, this.byteWriter);
   };
 
@@ -306,7 +309,7 @@
     if ((typeof (value) === "undefined") || (value === null)) {
     } else if (typeof (value) === "object") {
       var index = value.get_index();
-      writer.writeUint32(index);
+      writer.writeVarUint32(index);
     } else if (typeof (value) === "number") {
       if (typeToken === "i") {
         writer.writeInt32(value);
@@ -350,7 +353,7 @@
       throw new Error("Keyset not in table: " + keysetJson);
     }
 
-    writer.writeUint32(keysetIndex);
+    writer.writeVarUint32(keysetIndex);
 
     for (var i = 0, l = keyset.length; i < l; i++) {
       var key = keyset[i];
@@ -370,7 +373,7 @@
     if (!Array.isArray(node))
       throw new Error("Should have used serializeObject");
 
-    writer.writeUint32(node.length);
+    writer.writeVarUint32(node.length);
 
     for (var i = 0, l = node.length; i < l; i++) {
       this.walkValue(i, node[i], function (a, b, c, d) {
@@ -420,10 +423,16 @@
     // We write out the lengths in advance of the (length-prefixed) tables.
     // This allows a decoder to preallocate space for all the tables and
     //  use that to reconstruct relationships in a single pass.
-    writer.writeUint32(module.strings.get_count());
-    writer.writeUint32(module.keysets.get_count());
-    writer.writeUint32(module.objects.get_count());
-    writer.writeUint32(module.arrays.get_count());
+
+    var stringCount = module.strings.get_count();
+    var keysetCount = module.keysets.get_count();
+    var objectCount = module.objects.get_count();
+    var arrayCount  = module.arrays.get_count();
+
+    writer.writeUint32(stringCount);
+    writer.writeUint32(keysetCount);
+    writer.writeUint32(objectCount);
+    writer.writeUint32(arrayCount);
 
     module.serializeTable(writer, module.strings, true,  function (writer, value) {
       writer.writeUtf8String(value);

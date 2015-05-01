@@ -373,37 +373,20 @@
     var tempUintBytes = new Uint8Array(tempUint32.buffer);
 
     var encodedBuffer = leb.encodeUIntBuffer(tempUintBytes);
-    
+
     for (var i = 0; i < encodedBuffer.length; i++)
       byteWriter.write(encodedBuffer[i]);
   }
 
 
-  function readLEBUint32 (byteReader) {
+  function readLEBUint32 (bytes, offset) {
     var buf = new Buffer(8);
 
     // FIXME: eof
-    var numRead = 0;
-    for (var i = 0; i < buf.length; i++) {
-      var b = byteReader.read();
-      if (b === false) {
-        break;
-      } else {
-        numRead += 1;
-      }
-
-      buf[i] = b;
-    }
-
-    if (numRead === 0)
-      return false;
-
-    byteReader.skip(-numRead);
+    for (var i = 0; i < buf.length; i++)
+      buf[i] = bytes[offset + i];
 
     var decoded = leb.decodeUIntBuffer(buf, 0);
-
-    var distance = decoded.nextIndex;
-    byteReader.skip(distance);
 
     var tempBytes = new Uint8Array(4);
     // Round size up to 4 bytes
@@ -412,7 +395,10 @@
 
     var tempUint32 = new Uint32Array(tempBytes.buffer);
 
-    return tempUint32[0];
+    return { 
+      length: decoded.nextIndex, 
+      value : tempUint32[0] 
+    };
   }
 
 
@@ -427,6 +413,8 @@
   ]);
 
   exports.FormatName = "estree-compressed-v3";
+
+  exports.EnableVarints = true;
 
 
   exports.NamedTable  = NamedTable;
