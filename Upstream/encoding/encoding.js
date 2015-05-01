@@ -63,6 +63,9 @@ encoding.makeByteWriter = function (outputBytes, outputIndex) {
         i++;
         count++;
       },
+      getPosition: function () {
+        return count;
+      },
       getResult: function () {
         return outputBytes.slice(outputIndex, outputIndex + count);
       }
@@ -73,6 +76,9 @@ encoding.makeByteWriter = function (outputBytes, outputIndex) {
     return {
       write: function (byte) {
         resultBytes.push(byte);
+      },
+      getPosition: function () {
+        return resultBytes.length;
       },
       getResult: function () {
         if (typeof (Uint8Array) !== "undefined")
@@ -103,7 +109,7 @@ encoding.makeByteReader = function (bytes, index, count) {
       position += 1;
       return nextByte;
     },
-    get_position: function () {
+    getPosition: function () {
       return position;
     },
     skip: function (distance) {
@@ -136,7 +142,7 @@ encoding.makeCharacterReader = function (str) {
       position += 1;
       return nextChar;
     },
-    get_position: function () {
+    getPosition: function () {
       return position;
     },
     skip: function (distance) {

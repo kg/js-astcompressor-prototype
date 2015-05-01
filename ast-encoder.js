@@ -26,6 +26,9 @@
 
     this.scratchBytes = new Uint8Array(128);
     this.scratchView  = new DataView(this.scratchBytes.buffer);
+
+    this.tagBytesWritten = 0;
+    this.varintSizes = [0, 0, 0, 0, 0, 0];
   }
 
   ValueWriter.prototype.writeByte = function (b) {
@@ -51,6 +54,11 @@
     this.writeBytes(this.scratchBytes, 0, count);
   };
 
+  ValueWriter.prototype.writeTagByte = function (tagByte) {
+    this.writeByte(tagByte);
+    this.tagBytesWritten += 1;
+  };
+
   ValueWriter.prototype.writeUint32 = function (value) {
     this.scratchView.setUint32(0, value, true);
     this.writeScratchBytes(4);
@@ -62,9 +70,13 @@
   };
 
   ValueWriter.prototype.writeVarUint32 = function (value) {
-    if (common.EnableVarints)
+    if (common.EnableVarints) {
+      var before = this.byteWriter.getPosition();
       common.writeLEBUint32(this.byteWriter, value);
-    else
+      var after = this.byteWriter.getPosition();
+      var lengthBytes = after - before;
+      this.varintSizes[lengthBytes - 1] += 1;
+    } else
       return this.writeUint32(value);
   };
 
@@ -304,7 +316,7 @@
   function serializeValue (writer, typeToken, value) {
     var typeCode = typeToken.charCodeAt(0) | 0;
 
-    writer.writeByte(typeCode);
+    writer.writeTagByte(typeCode);
 
     if ((typeof (value) === "undefined") || (value === null)) {
     } else if (typeof (value) === "object") {
@@ -402,7 +414,7 @@
 
 
   // Converts a JsAstModule into bytes and writes them into byteWriter.
-  function serializeModule (module, byteWriter) {
+  function serializeModule (module, byteWriter, stats) {
     var writer = new ValueWriter();
 
     writer.writeBytes(common.Magic);
@@ -440,6 +452,9 @@
     module.serializeTable(writer, module.keysets, true,  serializeKeyset);
     module.serializeTable(writer, module.objects, true,  module.serializeObject);
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
+
+    console.log("tag bytes written:", writer.tagBytesWritten);
+    console.log("varint sizes:", writer.varintSizes);
 
     return writer.toArray();
   };

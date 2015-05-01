@@ -71,7 +71,7 @@
     if (!common.EnableVarints)
       return this.readUint32();
 
-    var offset = this.byteReader.get_position();
+    var offset = this.byteReader.getPosition();
     var result = common.readLEBUint32(this.bytes, offset);
     this.byteReader.skip(result.length);
     return result.value;
@@ -92,7 +92,7 @@
     if (length === 0)
       return "";
 
-    var result = encoding.UTF8.decode(this.bytes, this.byteReader.get_position(), length);
+    var result = encoding.UTF8.decode(this.bytes, this.byteReader.getPosition(), length);
 
     this.byteReader.skip(length);
 
