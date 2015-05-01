@@ -246,8 +246,10 @@
       return new Object(); 
     };
 
+    console.time("  read string tables");
     result.keys    = deserializeTable(reader, readUtf8String);
     result.strings = deserializeTable(reader, readUtf8String);
+    console.timeEnd("  read string tables");
 
     // Pre-allocate the objects and arrays for given IDs
     //  so that we can reconstruct relationships in one pass.
@@ -260,8 +262,13 @@
       // FIXME: This means we have to grow it when repopulating it. :-(
       result.arrays[i] = new Array();
 
+    console.time("  read objects");
     deserializeObjects(reader, result);
+    console.timeEnd("  read objects");
+
+    console.time("  read arrays");
     deserializeArrays (reader, result);
+    console.timeEnd("  read arrays");
 
     return result;
   };

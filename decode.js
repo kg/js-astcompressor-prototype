@@ -30,9 +30,16 @@ console.time("bytesToModule");
 var inputModule = astDecoder.bytesToModule(inputBytes);
 console.timeEnd("bytesToModule");
 
+inputBytes = null;
+if ((typeof (global) !== "undefined") && global.gc) {
+  global.gc();
+}
+
 console.time("moduleToAst");
 var outputAst = astDecoder.moduleToAst(inputModule);
 console.timeEnd("moduleToAst");
+
+console.log("heapUsed " + process.memoryUsage().heapUsed);
 
 if (outputAstFile)
   fs.writeFileSync(outputAstFile, JSON.stringify(outputAst));
