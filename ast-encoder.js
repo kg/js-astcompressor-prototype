@@ -21,24 +21,38 @@
     // HACK: Max size 32mb because growable buffers are effort
     var maxSize = (1024 * 1024) * 32;
 
-    this.bytes      = new Uint8Array(maxSize);
-    this.byteWriter = encoding.makeByteWriter(this.bytes, 0);
-
-    this.scratchBytes = new Uint8Array(128);
-    this.scratchView  = new DataView(this.scratchBytes.buffer);
+    this.bytes    = new Uint8Array(maxSize);
+    this.position = 0;
+    this.view     = new DataView(this.bytes.buffer);
 
     this.tagBytesWritten = 0;
     this.varintSizes = [0, 0, 0, 0, 0, 0];
-  }
+  };
 
+  ValueWriter.prototype.getPosition = function () {
+    return this.position;
+  };
+
+  ValueWriter.prototype.skip = function (distance) {
+    this.position += distance;
+  };
+
+  ValueWriter.prototype.write = 
   ValueWriter.prototype.writeByte = function (b) {
-    this.byteWriter.write(b);
+    if (this.position >= this.bytes.length)
+      throw new Error("buffer full");
+
+    this.bytes[this.position++] = b;
   };
 
   ValueWriter.prototype.writeBytes = function (bytes, offset, count) {
+    if (this.position >= this.bytes.length)
+      throw new Error("buffer full");
+
     if (arguments.length === 1) {
-      offset = 0;
-      count = bytes.length | 0;
+      this.bytes.set(bytes, this.position);
+      this.position += bytes.length;
+      return;
     } else if (arguments.length === 3) {
       offset |= 0;
       count |= 0;
@@ -46,8 +60,8 @@
       throw new Error("Expected (bytes) or (bytes, offset, count)");
     }
 
-    for (var i = 0; i < count; i++)
-      this.byteWriter.write(bytes[offset + i]);
+    this.bytes.set(bytes.subarray(offset, offset + count), this.position);
+    this.position += count;
   };
 
   ValueWriter.prototype.writeScratchBytes = function (count) {
@@ -60,29 +74,30 @@
   };
 
   ValueWriter.prototype.writeUint32 = function (value) {
-    this.scratchView.setUint32(0, value, true);
-    this.writeScratchBytes(4);
+    this.view.setUint32(this.position, value, true);
+    this.position += 4;
   };
 
   ValueWriter.prototype.writeInt32 = function (value) {
-    this.scratchView.setInt32(0, value, true);
-    this.writeScratchBytes(4);
+    this.view.setInt32(this.position, value, true);
+    this.position += 4;
   };
 
   ValueWriter.prototype.writeVarUint32 = function (value) {
     if (common.EnableVarints) {
-      var before = this.byteWriter.getPosition();
-      common.writeLEBUint32(this.byteWriter, value);
-      var after = this.byteWriter.getPosition();
+      var before = this.position;
+      common.writeLEBUint32(this, value);
+      var after = this.position;
       var lengthBytes = after - before;
       this.varintSizes[lengthBytes - 1] += 1;
-    } else
+    } else {
       return this.writeUint32(value);
+    }
   };
 
   ValueWriter.prototype.writeFloat64 = function (value) {
-    this.scratchView.setFloat64(0, value, true);
-    this.writeScratchBytes(8);
+    this.view.setFloat64(this.position, value, true);
+    this.position += 8;
   };
 
   ValueWriter.prototype.writeUtf8String = function (text) {
@@ -99,11 +114,12 @@
     encoding.UTF8.encode(text, counter);
 
     this.writeVarUint32(lengthBytes);
-    encoding.UTF8.encode(text, this.byteWriter);
+    encoding.UTF8.encode(text, this);
   };
 
+  ValueWriter.prototype.getResult = 
   ValueWriter.prototype.toArray = function () {
-    return this.byteWriter.getResult();
+    return this.bytes.subarray(0, this.position);
   };
 
 
