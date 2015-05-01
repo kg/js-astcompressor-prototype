@@ -45,8 +45,10 @@ encoding.charCodeAt = function fixedCharCodeAt (str, idx) {
 };
 
 
-
-
+/// makeByteWriter(Uint8Array buffer, offset)
+///   getResult -> (Uint8Array view on used region of buffer)
+/// makeByteWriter()
+///   getResult -> (Uint8Array containing written bytes)
 encoding.makeByteWriter = function (outputBytes, outputIndex) {
   if (arguments.length === 2) {
     var i = outputIndex | 0;
@@ -154,18 +156,21 @@ encoding.makeCharacterReader = function (str) {
 };
 
 
-encoding.UTF8.encode = function (string, outputBytes, outputIndex) {
+/// encode(str, outputBytes, outputOffset) -> numBytesWritten
+/// encode(str, outputWriter) -> numBytesWritten
+/// encode(str) -> Uint8Array
+encoding.UTF8.encode = function (string, output, outputIndex) {
   // http://tidy.sourceforge.net/cgi-bin/lxr/source/src/utf8.c
 
   var UTF8ByteSwapNotAChar = 0xFFFE;
   var UTF8NotAChar         = 0xFFFF;
 
   var writer;
-  if (arguments.length === 3) {
-    writer = encoding.makeByteWriter(outputBytes, outputIndex);
+  if ((arguments.length === 3) && output.buffer) {
+    writer = encoding.makeByteWriter(output, outputIndex);
   } else if (arguments.length === 2) {
-    if (outputBytes && outputBytes.write && outputBytes.getResult)
-      writer = outputBytes;
+    if (output && output.write && output.getResult)
+      writer = output;
     else
       throw new Error("Expected 2nd arg to be a writer");
   } else if (arguments.length === 1) {
