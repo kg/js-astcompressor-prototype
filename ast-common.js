@@ -414,7 +414,7 @@
 
   exports.FormatName = "estree-compressed-v3";
 
-  exports.EnableVarints = true;
+  exports.EnableVarints = false;
 
 
   exports.NamedTable  = NamedTable;

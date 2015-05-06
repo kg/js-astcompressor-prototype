@@ -123,16 +123,83 @@
   };
 
 
+  function Keyset (exemplar, index) {
+    this.keys = new Set();
+    this.keysArray = [];
+    this.index = index;
+
+    for (var k in exemplar) {
+      if (!exemplar.hasOwnProperty(k))
+        continue;
+
+      this.keys.add(k);
+      this.keysArray.push(k);
+    }
+
+    this.keysArray.sort();
+
+    Object.defineProperty(this, "length", {
+      get: function () {
+        return this.keysArray.length;
+      }
+    });
+  };
+
+  Keyset.prototype.checkObject = function (obj) {
+    for (var k in obj) {
+      if (!obj.hasOwnProperty(k))
+        continue;
+      else if (!this.keys.has(k))
+        return false;
+    }
+
+    for (var i = 0, l = this.keysArray.length; i < l; i++) {
+      var k = this.keysArray[i];
+
+      if (typeof (obj[k]) === "undefined")
+        return false;
+    }
+
+    return true;
+  };
+
+  Keyset.prototype.toString = function () {
+    return "<Keyset " + JSON.stringify(this.keysArray) + ">";
+  };
+
 
   function JsAstModule () {
     this.strings = new StringTable("String");
 
-    this.keysets = new NamedTable("Keyset");
+    this.keysets = [];
 
     this.arrays  = new ObjectTable("Array");
     this.objects = new ObjectTable("Object");
 
-    this.root_id     = null;
+    this.root_id = null;
+  };
+
+
+  JsAstModule.prototype.findKeyset = function (obj) {
+    for (var i = 0, l = this.keysets.length; i < l; i++) {
+      var ks = this.keysets[i];
+
+      if (ks.checkObject(obj))
+        return ks;
+    }
+
+    return null;
+  };
+
+
+  JsAstModule.prototype.findOrCreateKeyset = function (obj) {
+    var result = this.findKeyset(obj);
+    if (!result) {
+      result = new Keyset(obj, this.keysets.length);
+      this.keysets.push(result);
+    }
+
+    return result;
   };
 
 
@@ -140,9 +207,16 @@
   function astToModule (root) {
     var result = new JsAstModule();
 
+    var walkedCount = 0;
+    var progressInterval = 10000;
+
     var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
       if (table)
         table.add(value);
+
+      walkedCount++;
+      if ((walkedCount % progressInterval) === 0)
+        console.log("Scanned " + walkedCount + " nodes");
     };
 
     astutil.mutate(root, function visit (context, node) {
@@ -158,11 +232,7 @@
           result.walkValue(i, node[i], walkCallback);
 
       } else {
-        var keyset = Object.keys(node);
-        keyset.sort();
-        var keysetJson = JSON.stringify(keyset);
-
-        result.keysets.add(keysetJson, keyset, false);
+        var keyset = result.findOrCreateKeyset(node);
 
         nodeTable = result.objects;
 
@@ -181,7 +251,7 @@
   function serializeKeyset (writer, keyset) {
     // FIXME: Store as series of stringtable indices?
     //  Doesn't matter if we end up with small # of keysets, ultimately.
-    var json = JSON.stringify(keyset);
+    var json = JSON.stringify(keyset.keysArray);
     writer.writeUtf8String(json);
   };
 
@@ -372,27 +442,26 @@
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
-    var keyset = Object.keys(node);
-    keyset.sort();
-    var keysetJson = JSON.stringify(keyset);
+    var keyset = this.findKeyset(node);
 
-    var keysetIndex = this.keysets.get_index(keysetJson);
-    if (typeof (keysetIndex) === "undefined") {
-      throw new Error("Keyset not in table: " + keysetJson);
+    if (!keyset) {
+      throw new Error("No keyset for node " + JSON.stringify(node));
     }
 
-    writer.writeVarUint32(keysetIndex);
+    writer.writeVarUint32(keyset.index);
 
-    for (var i = 0, l = keyset.length; i < l; i++) {
-      var key = keyset[i];
+    var walkCallback = function (a, b, c, d) {
+      serializePair(
+        writer, serializeValue,
+        a, b, c, d
+      );
+    };
+
+    var self = this;
+    for (var i = 0, l = keyset.keysArray.length; i < l; i++) {
+      var key = keyset.keysArray[i];
       var value = node[key];
-
-      this.walkValue(key, value, function (a, b, c, d) {
-        serializePair(
-          writer, serializeValue,
-          a, b, c, d
-        );
-      });
+      self.walkValue(key, value, walkCallback);
     }
   };
 
@@ -441,7 +510,6 @@
     */
 
     module.strings.finalize(true);
-    module.keysets.finalize(true);
 
     module.arrays .finalize(true);
     module.objects.finalize(true);
@@ -453,7 +521,7 @@
     //  use that to reconstruct relationships in a single pass.
 
     var stringCount = module.strings.get_count();
-    var keysetCount = module.keysets.get_count();
+    var keysetCount = module.keysets.length;
     var objectCount = module.objects.get_count();
     var arrayCount  = module.arrays.get_count();
 
@@ -465,7 +533,14 @@
     module.serializeTable(writer, module.strings, true,  function (writer, value) {
       writer.writeUtf8String(value);
     });
-    module.serializeTable(writer, module.keysets, true,  serializeKeyset);
+
+    writer.writeUint32(module.keysets.length);
+
+    for (var i = 0, l = module.keysets.length; i < l; i++) {
+      var keyset = module.keysets[i];
+      serializeKeyset(writer, keyset);
+    }
+
     module.serializeTable(writer, module.objects, true,  module.serializeObject);
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
 
