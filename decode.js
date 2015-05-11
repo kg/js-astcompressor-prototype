@@ -26,8 +26,12 @@ else
     inputBytes = new Uint8Array(inputBuffer);
 console.timeEnd("read webasm");
 
+var shapes = astDecoder.ShapeTable.fromJson(
+  fs.readFileSync("shapes-esprima.json", { encoding: "utf8" })
+);
+
 console.time("bytesToModule");
-var inputModule = astDecoder.bytesToModule(inputBytes);
+var inputModule = astDecoder.bytesToModule(inputBytes, shapes);
 console.timeEnd("bytesToModule");
 
 inputBytes = null;

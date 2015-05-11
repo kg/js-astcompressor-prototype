@@ -104,10 +104,12 @@
   };
 
 
-  function JsAstModule () {
+  function JsAstModule (shapes) {
     this.strings = null;
     this.arrays  = null;
     this.objects = null;
+
+    this.shapes  = shapes;
 
     this.root_id = null;
   };
@@ -123,12 +125,18 @@
     switch (typeToken) {
       case "s":
       case "a":
-      case "o": {
+      case "o":
+      case "r": {
         var index = reader.readVarUint32();
 
         switch (typeToken) {
           case "s":
             return module.strings[index];
+
+          case "r":
+            var source = module.strings[index];
+            var r = new RegExp(source);
+            return r;
 
           case "a":
             return module.arrays[index];
@@ -173,14 +181,21 @@
 
 
   function deserializeObjectContents (reader, module, obj) {
-    var shapeNameIndex = reader.readVarUint32();  
-    var shape = module.shapes.get(shapeNameIndex);
+    var shapeNameIndex = reader.readVarUint32();
+    var shapeName = module.strings[shapeNameIndex];
+    if (!shapeName)
+      throw new Error("Could not look up shape name #" + shapeNameIndex);    
+    var shape = module.shapes.get(shapeName);
+    if (!shape)
+      throw new Error("Could not find shape '" + shapeName + "'");
+
+    obj[module.shapes.shapeKey] = shapeName;
 
     for (var i = 0, l = shape.fields.length; i < l; i++) {
       var key = shape.fields[i];
       var value = deserializeValue(reader, module);
       obj[key] = value;
-    }
+    }    
   };
 
 
@@ -224,7 +239,7 @@
   };
 
 
-  function bytesToModule (bytes) {
+  function bytesToModule (bytes, shapes) {
     var reader = new ValueReader(bytes, 0, bytes.length);
 
     var magic = reader.readBytes(common.Magic.length);
@@ -239,7 +254,7 @@
       throw new Error("Format name does not match");
     }
 
-    var result = new JsAstModule();
+    var result = new JsAstModule(shapes);
 
     result.rootIndex = reader.readUint32();
 
@@ -290,7 +305,7 @@
     return module.objects[module.rootIndex];
   };
 
-
+  exports.ShapeTable    = common.ShapeTable;
   exports.ValueReader   = ValueReader;
   exports.bytesToModule = bytesToModule;
   exports.moduleToAst   = moduleToAst;

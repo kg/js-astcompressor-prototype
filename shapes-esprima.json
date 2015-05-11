@@ -1,17 +1,20 @@
 {
   "shapeKey": "type",
   "shapes": {
+    "Program": {
+      "body": "BlockStatement"
+    },
     "Function": {
-      "id" : "Identifier?",
+      "id": "Identifier?",
       "params": [ "Pattern" ],
       "defaults": [ "Expression" ],
-      "rest" : "Identifier?",
-      "body" : "BlockStatement | Expression"
+      "rest": "Identifier?",
+      "body": "BlockStatement | Expression"
     },
     "EmptyStatement": {
     },
     "BlockStatement": {
-      "body" : [ "Statement" ]
+      "body": [ "Statement" ]
     },
     "ExpressionStatement": {
       "expression": "Expression"
@@ -166,6 +169,25 @@
       "object": "Expression",
       "property": "Identifier | Expression",
       "computed": "Boolean"
+    },
+    "LetExpression": {
+      "head": [ "VariableDeclarator" ],
+      "body": "Expression"
+    },
+    "SwitchCase": {
+      "test": "Expression?",
+      "consequent": [ "Statement" ]
+    },
+    "CatchClause": {
+      "param": "Pattern",
+      "guard": "Expression?",
+      "body": "BlockStatement"
+    },
+    "Identifier": {
+      "name": "String"
+    },
+    "Literal": {
+      "value": "String | Boolean | null | Number | RegExp"
     }
   }
 }

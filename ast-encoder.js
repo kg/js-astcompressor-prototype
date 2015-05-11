@@ -299,6 +299,8 @@
           callback(key, "N");
         else if (Array.isArray(value))
           callback(key, "a", this.arrays, value);
+        else if (Object.getPrototypeOf(value) === RegExp.prototype)
+          callback(key, "r", this.strings, value.source);
         else
           callback(key, "o", this.objects, value);
         break;
@@ -370,9 +372,11 @@
 
     var shapeName = node[this.shapes.shapeKey];
     var shape = this.shapes.get(shapeName);
-    if (!shape)
+    if (!shape) {
+      console.log(shapeName, node);
       throw new Error("Unknown shape " + shapeName);
-    
+    }
+
     var shapeNameIndex = this.strings.get_index(shapeName);
 
     writer.writeVarUint32(shapeNameIndex);
@@ -388,6 +392,10 @@
     for (var i = 0, l = shape.fields.length; i < l; i++) {
       var key = shape.fields[i];
       var value = node[key];
+
+      if (typeof (value) === "undefined")
+        value = null;
+
       self.walkValue(key, value, walkCallback);
     }
   };
