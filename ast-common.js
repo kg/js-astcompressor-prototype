@@ -369,6 +369,38 @@
   ObjectTable.prototype = Object.create(UniqueTable.prototype);
 
 
+  function ShapeTable (shapeKey) {
+    this.shapeKey = shapeKey;
+
+    NamedTable.call(this, "Shape");
+  };
+
+  ShapeTable.fromJson = function (json) {
+    var parsed = JSON.parse(json);
+
+    var result = new ShapeTable(parsed.shapeKey);
+
+    for (var k in parsed.shapes) {
+      var definition = new ShapeDefinition(k);
+      var fields = parsed.shapes[k];
+
+      for (var j in fields)
+        definition.fields.push(j);
+
+      result.add(k, definition);
+    }
+
+    return result;
+  };
+
+  ShapeTable.prototype = Object.create(NamedTable.prototype);
+
+
+  function ShapeDefinition (key) {
+    this.key = key;
+    this.fields = [];
+  };
+
 
   function writeLEBUint32 (byteWriter, value) {
     var b = 0;
@@ -412,13 +444,15 @@
   ]);
 
   exports.FormatName = "estree-compressed-v3";
-
   exports.EnableVarints = true;
 
+
+  exports.ShapeDefinition = ShapeDefinition;
 
   exports.NamedTable  = NamedTable;
   exports.UniqueTable = UniqueTable;
   exports.StringTable = StringTable;
   exports.ObjectTable = ObjectTable;
+  exports.ShapeTable  = ShapeTable;
   exports.GetObjectId = GetObjectId;
 }));

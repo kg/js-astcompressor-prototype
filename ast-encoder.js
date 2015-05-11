@@ -124,89 +124,20 @@
   };
 
 
-  function Keyset (exemplar, index) {
-    this.keys = new Set();
-    this.keysArray = [];
-    this.index = index;
-
-    for (var k in exemplar) {
-      if (!exemplar.hasOwnProperty(k))
-        continue;
-
-      this.keys.add(k);
-      this.keysArray.push(k);
-    }
-
-    this.keysArray.sort();
-
-    Object.defineProperty(this, "length", {
-      get: function () {
-        return this.keysArray.length;
-      }
-    });
-  };
-
-  Keyset.prototype.checkObject = function (obj) {
-    for (var k in obj) {
-      if (!obj.hasOwnProperty(k))
-        continue;
-      else if (!this.keys.has(k))
-        return false;
-    }
-
-    for (var i = 0, l = this.keysArray.length; i < l; i++) {
-      var k = this.keysArray[i];
-
-      if (typeof (obj[k]) === "undefined")
-        return false;
-    }
-
-    return true;
-  };
-
-  Keyset.prototype.toString = function () {
-    return "<Keyset " + JSON.stringify(this.keysArray) + ">";
-  };
-
-
-  function JsAstModule () {
+  function JsAstModule (shapes) {
     this.strings = new StringTable("String");
-
-    this.keysets = [];
-
     this.arrays  = new ObjectTable("Array");
     this.objects = new ObjectTable("Object");
+
+    this.shapes  = shapes;
 
     this.root_id = null;
   };
 
 
-  JsAstModule.prototype.findKeyset = function (obj) {
-    for (var i = 0, l = this.keysets.length; i < l; i++) {
-      var ks = this.keysets[i];
-
-      if (ks.checkObject(obj))
-        return ks;
-    }
-
-    return null;
-  };
-
-
-  JsAstModule.prototype.findOrCreateKeyset = function (obj) {
-    var result = this.findKeyset(obj);
-    if (!result) {
-      result = new Keyset(obj, this.keysets.length);
-      this.keysets.push(result);
-    }
-
-    return result;
-  };
-
-
   // Converts an esprima ast into a JsAstModule.
-  function astToModule (root) {
-    var result = new JsAstModule();
+  function astToModule (root, shapes) {
+    var result = new JsAstModule(shapes);
 
     var walkedCount = 0;
     var progressInterval = 100000;
@@ -235,8 +166,6 @@
           result.walkValue(i, node[i], walkCallback);
 
       } else {
-        var keyset = result.findOrCreateKeyset(node);
-
         nodeTable = result.objects;
 
         result.walkObject(node, walkCallback);
@@ -248,14 +177,6 @@
     result.root_id = result.objects.get_id(root);
 
     return result;
-  };
-
-
-  function serializeKeyset (writer, keyset) {
-    // FIXME: Store as series of stringtable indices?
-    //  Doesn't matter if we end up with small # of keysets, ultimately.
-    var json = JSON.stringify(keyset.keysArray);
-    writer.writeUtf8String(json);
   };
 
 
@@ -447,13 +368,14 @@
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
-    var keyset = this.findKeyset(node);
+    var shapeName = node[this.shapes.shapeKey];
+    var shape = this.shapes.get(shapeName);
+    if (!shape)
+      throw new Error("Unknown shape " + shapeName);
+    
+    var shapeNameIndex = this.strings.get_index(shapeName);
 
-    if (!keyset) {
-      throw new Error("No keyset for node " + JSON.stringify(node));
-    }
-
-    writer.writeVarUint32(keyset.index);
+    writer.writeVarUint32(shapeNameIndex);
 
     var walkCallback = function (a, b, c, d) {
       serializePair(
@@ -463,8 +385,8 @@
     };
 
     var self = this;
-    for (var i = 0, l = keyset.keysArray.length; i < l; i++) {
-      var key = keyset.keysArray[i];
+    for (var i = 0, l = shape.fields.length; i < l; i++) {
+      var key = shape.fields[i];
       var value = node[key];
       self.walkValue(key, value, walkCallback);
     }
@@ -526,26 +448,16 @@
     //  use that to reconstruct relationships in a single pass.
 
     var stringCount = module.strings.get_count();
-    var keysetCount = module.keysets.length;
     var objectCount = module.objects.get_count();
     var arrayCount  = module.arrays.get_count();
 
     writer.writeUint32(stringCount);
-    writer.writeUint32(keysetCount);
     writer.writeUint32(objectCount);
     writer.writeUint32(arrayCount);
 
     module.serializeTable(writer, module.strings, true,  function (writer, value) {
       writer.writeUtf8String(value);
     });
-
-    writer.writeUint32(module.keysets.length);
-
-    for (var i = 0, l = module.keysets.length; i < l; i++) {
-      var keyset = module.keysets[i];
-      serializeKeyset(writer, keyset);
-    }
-
     module.serializeTable(writer, module.objects, true,  module.serializeObject);
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
 
@@ -555,6 +467,7 @@
     return writer.toArray();
   };
 
+  exports.ShapeTable = common.ShapeTable;
 
   exports.astToModule = astToModule;
   exports.serializeModule = serializeModule;

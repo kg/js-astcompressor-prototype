@@ -19,6 +19,10 @@ var outputFile = process.argv[3];
 var outputAstFile = process.argv[4];
 var expectedOutputJsFile = process.argv[5];
 
+var shapes = astEncoder.ShapeTable.fromJson(
+  fs.readFileSync("shapes-esprima.json", { encoding: "utf8" })
+);
+
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
@@ -27,7 +31,7 @@ var inputAst = esprima.parse(inputJs);
 console.timeEnd("esprima parse");
 
 console.time("astToModule");
-var outputModule = astEncoder.astToModule(inputAst);
+var outputModule = astEncoder.astToModule(inputAst, shapes);
 console.timeEnd("astToModule");
 
 if (true) {
