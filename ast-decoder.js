@@ -21,7 +21,9 @@
     this.bytes        = bytes;
     this.byteReader   = encoding.makeByteReader(bytes, index, count);
     this.scratchBytes = new Uint8Array(128);
-    this.scratchView  = new DataView(this.scratchBytes.buffer);
+    this.scratchU32   = new Uint32Array (this.scratchBytes.buffer);
+    this.scratchI32   = new Int32Array  (this.scratchBytes.buffer);
+    this.scratchF64   = new Float64Array(this.scratchBytes.buffer);
   }
 
   ValueReader.prototype.readByte = function () {
@@ -57,14 +59,14 @@
     if (!this.readScratchBytes(4))
       return false;
 
-    return this.scratchView.getUint32(0, true);
+    return this.scratchU32[0];
   };
 
   ValueReader.prototype.readInt32 = function () {
     if (!this.readScratchBytes(4))
       return false;
 
-    return this.scratchView.getInt32(0, true);
+    return this.scratchI32[0];
   };
 
   ValueReader.prototype.readVarUint32 = function () {
@@ -79,7 +81,7 @@
     if (!this.readScratchBytes(8))
       return false;
 
-    return this.scratchView.getFloat64(0, true);
+    return this.scratchF64[0];
   };
 
   ValueReader.prototype.readUtf8String = function () {
