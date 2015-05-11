@@ -71,10 +71,8 @@
     if (!common.EnableVarints)
       return this.readUint32();
 
-    var offset = this.byteReader.getPosition();
-    var result = common.readLEBUint32(this.bytes, offset);
-    this.byteReader.skip(result.length);
-    return result.value;
+    var result = common.readLEBUint32(this.byteReader);
+    return result;
   };
 
   ValueReader.prototype.readFloat64 = function () {

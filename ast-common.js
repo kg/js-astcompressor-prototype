@@ -9,8 +9,6 @@
     factory((root.astCommon = {}));
   }
 }(this, function (exports) {
-  var leb    = require("./Upstream/leb/leb.js");
-
   function NamedTableId (entry, semantic) {
     if (!entry)
       throw new Error("Id must have an entry");
@@ -349,57 +347,58 @@
   StringTable.prototype = Object.create(UniqueTable.prototype);
 
 
+  var GetObjectId_table = new WeakMap();
+  var GetObjectId_nextId = 0;
+
+  function GetObjectId (obj) {
+    var existing = GetObjectId_table.get(obj);
+    if (typeof (existing) === "number")
+      return existing;
+
+    var result = GetObjectId_nextId++;
+    GetObjectId_table.set(obj, result);
+
+    return result;
+  };
+
+
   function ObjectTable (semantic) {
-    this.idMapping = new WeakMap();
-    this.nextId = 0;
-
-    UniqueTable.call(this, function (o) {
-      var existingId = this.idMapping.get(o);
-      if (typeof (existingId) !== "number")
-        this.idMapping.set(o, existingId = (this.nextId++));
-
-      return existingId;
-    }, semantic);
+    UniqueTable.call(this, GetObjectId, semantic);
   };
 
   ObjectTable.prototype = Object.create(UniqueTable.prototype);
 
 
-  // FIXME: leb.js is gross and slow and node-only. Kill it.
 
   function writeLEBUint32 (byteWriter, value) {
-    var tempUint32 = new Uint32Array(1);
-    tempUint32[0] = value;
-    var tempUintBytes = new Uint8Array(tempUint32.buffer);
+    var b = 0;
+    value |= 0;
 
-    var encodedBuffer = leb.encodeUIntBuffer(tempUintBytes);
+    do {
+      b = value & 0x7F;
+      value >>= 7;
+      if (value)
+        b |= 0x80;
 
-    for (var i = 0; i < encodedBuffer.length; i++)
-      byteWriter.write(encodedBuffer[i]);
-  }
+      byteWriter.write(b);
+    } while (value);
+  };
 
+  function readLEBUint32 (byteReader) {
+    var result = 0, shift = 0;
+    while (true) {
+      var b = byteReader.read() | 0;
+      var shifted = (b & 0x7F) << shift;
+      result |= shifted;
 
-  function readLEBUint32 (bytes, offset) {
-    var buf = new Buffer(8);
+      if ((b & 0x80) === 0)
+        break;
 
-    // FIXME: eof
-    for (var i = 0; i < buf.length; i++)
-      buf[i] = bytes[offset + i];
+      shift += 7;
+    }
 
-    var decoded = leb.decodeUIntBuffer(buf, 0);
-
-    var tempBytes = new Uint8Array(4);
-    // Round size up to 4 bytes
-    for (var i = 0; i < decoded.value.length; i++)
-      tempBytes[i] = decoded.value[i];
-
-    var tempUint32 = new Uint32Array(tempBytes.buffer);
-
-    return { 
-      length: decoded.nextIndex, 
-      value : tempUint32[0] 
-    };
-  }
+    return result;
+  };
 
 
   exports.writeLEBUint32 = writeLEBUint32;
@@ -421,4 +420,5 @@
   exports.UniqueTable = UniqueTable;
   exports.StringTable = StringTable;
   exports.ObjectTable = ObjectTable;
+  exports.GetObjectId = GetObjectId;
 }));

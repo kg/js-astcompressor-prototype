@@ -14,7 +14,8 @@
   var NamedTable  = common.NamedTable,
       UniqueTable = common.UniqueTable,
       StringTable = common.StringTable,
-      ObjectTable = common.ObjectTable;
+      ObjectTable = common.ObjectTable,
+      GetObjectId = common.GetObjectId;
 
 
   function ValueWriter () {
@@ -208,15 +209,17 @@
     var result = new JsAstModule();
 
     var walkedCount = 0;
-    var progressInterval = 10000;
+    var progressInterval = 100000;
 
     var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
       if (table)
         table.add(value);
 
       walkedCount++;
-      if ((walkedCount % progressInterval) === 0)
+      if ((walkedCount % progressInterval) === 0) {
         console.log("Scanned " + walkedCount + " nodes");
+        // console.log(key, value);
+      }
     };
 
     astutil.mutate(root, function visit (context, node) {
@@ -261,18 +264,19 @@
     var count = 0, originalCount = objects.count;
 
     // Assign temporary unique indices to all observed values
-    var temporaryIndices = new Map();
+    var temporaryIndices = Object.create(null);
     var nextTemporaryIndex = 0;
     // On first visit to an object generate a content string
-    var contentStrings = new Map();
-    var cycleSentinel = new Object();
+    var contentStrings = Object.create(null);
+    var cycleSentinel = Object.create(null);
     // Lookup table by content string, for deduping
-    var objectsByContentString = new Map();
+    var objectsByContentString = Object.create(null);
 
     function getTemporaryIndex (value) {
-      var existing = temporaryIndices.get(value);
-      if (!existing)
-        temporaryIndices.set(value, existing = nextTemporaryIndex++);
+      var existing = temporaryIndices[value];
+      if (typeof (existing) !== "number") {
+        temporaryIndices[value] = existing = nextTemporaryIndex++;
+      }
 
       return existing;
     };
@@ -308,16 +312,17 @@
     };
 
     function getContentString (obj) {
-      var existing = contentStrings.get(obj);
+      var id = GetObjectId(obj);
+      var existing = contentStrings[id];
 
       if (existing === cycleSentinel) {
-        return getTemporaryIndex(obj);
-      } else if (!existing) {
-        contentStrings.set(obj, cycleSentinel);
+        return id;
+      } else if (typeof (existing) !== "string") {
+        contentStrings[id] = cycleSentinel;
 
         existing = generateContentString(obj);
 
-        contentStrings.set(obj, existing);
+        contentStrings[id] = existing;
       }
 
       return existing;
@@ -334,7 +339,7 @@
       var obj = id.get_value();
       var objCS = getContentString(obj);
 
-      var existing = objectsByContentString.get(objCS);
+      var existing = objectsByContentString[objCS];
 
       if (existing && existing.equals(id)) {
         // Do nothing
@@ -342,7 +347,7 @@
         count += 1;
         objects.dedupe(id, existing);
       } else {
-        objectsByContentString.set(objCS, id);
+        objectsByContentString[objCS] = id;
       }
     });
 
