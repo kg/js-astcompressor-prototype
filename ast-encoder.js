@@ -304,8 +304,6 @@
       case "object":
         if (Array.isArray(value))
           callback(key, "a", this.arrays, value, callbackArg);
-        else if (value && (Object.getPrototypeOf(value) === RegExp.prototype))
-          callback(key, "r", this.strings, value.source, callbackArg);
         else
           callback(key, "o", this.objects, value, callbackArg);
         break;
@@ -395,9 +393,15 @@
       throw new Error("Should have used serializeArray");
 
     var shapeName = node[this.shapes.shapeKey];
+    if (typeof (shapeName) !== "string") {
+      // HACK for esprima nonsense
+      if (Object.getPrototypeOf(node) === RegExp.prototype)
+        shapeName = "RegExp";
+    }
+
     var shape = this.shapes.get(shapeName);
     if (!shape) {
-      console.log(shapeName, node);
+      console.log(shapeName, node, Object.getPrototypeOf(node), node.toString());
       throw new Error("Unknown shape " + shapeName);
     }
 
@@ -465,13 +469,53 @@
 
     writer.writeVarUint32(node.length);
 
+    // HACK: Identify arrays where all elements live in the same table.
+    // This is to compensate for this prototype not using static type information
+    //  from the shapes table when compressing arrays.
+    // (A real implementation would not have this problem.)
+    var commonType;
     for (var i = 0, l = node.length; i < l; i++) {
-      this.walkValue(i, node[i], function (a, b, c, d) {
-        serializePair(
-          writer, serializeValue,
-          a, b, c, d
-        );
-      });
+      var item = node[i];
+      var itemType;
+
+      if (item === null)
+        continue;
+
+      if (Array.isArray(item))
+        itemType = "array";
+      else
+        itemType = typeof(item);
+
+      if (typeof (commonType) === "undefined")
+        commonType = itemType;
+      else if (itemType !== commonType) {
+        commonType = undefined;
+        break;
+      }
+    }
+
+    // If the common type is in our table, encode without type tags
+    var commonTypeIndex = common.CommonTypes.indexOf(commonType);
+    if (commonTypeIndex >= 0) {
+      writer.writeByte(commonTypeIndex);
+
+      for (var i = 0, l = node.length; i < l; i++) {
+        this.walkValue(i, node[i], function (key, typeToken, table, value) {
+          var serializationValue = extractSerializationValue(table, value);
+          serializeValue(writer, true, serializationValue);
+        });
+      }
+    } else {
+      writer.writeByte(0xFF);
+
+      for (var i = 0, l = node.length; i < l; i++) {
+        this.walkValue(i, node[i], function (a, b, c, d) {
+          serializePair(
+            writer, serializeValue,
+            a, b, c, d
+          );
+        });
+      }
     }
   };
 
@@ -533,8 +577,27 @@
     return writer.toArray();
   };
 
+
+  // Esprima is a nightmare that deviates from reflect.parse in unhelpful ways
+  function esprimaCleanup (root) {
+    var newRoot = astutil.mutate(root, function (context, node) {
+      if (!node)
+        return;
+
+      if (node.type === "Literal") {
+        // FIXME: UGH esprima/escodegen completely mangle literals
+        delete node["raw"];
+        delete node["regex"];
+      }
+    });
+
+    return newRoot;
+  };
+
+
   exports.ShapeTable = common.ShapeTable;
 
   exports.astToModule = astToModule;
   exports.serializeModule = serializeModule;
+  exports.esprimaCleanup = esprimaCleanup;
 }));

@@ -30,8 +30,15 @@ console.time("esprima parse");
 var inputAst = esprima.parse(inputJs);
 console.timeEnd("esprima parse");
 
+console.time("esprima ast cleanup");
+var cleanAst = astEncoder.esprimaCleanup(inputAst);
+console.timeEnd("esprima ast cleanup");
+
+if (outputAstFile)
+  fs.writeFileSync(outputAstFile, JSON.stringify(cleanAst));
+
 console.time("astToModule");
-var outputModule = astEncoder.astToModule(inputAst, shapes);
+var outputModule = astEncoder.astToModule(cleanAst, shapes);
 console.timeEnd("astToModule");
 
 if (true) {
@@ -51,9 +58,6 @@ fs.writeSync(fdOut, new Buffer(bytes), 0, bytes.length);
 console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);
-
-if (outputAstFile)
-  fs.writeFileSync(outputAstFile, JSON.stringify(inputAst));
 
 if (expectedOutputJsFile)
   fs.writeFileSync(expectedOutputJsFile, escodegen.generate(inputAst));

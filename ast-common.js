@@ -454,6 +454,13 @@
     0x0D, 0x0A, 0x1A, 0x0A
   ]);
 
+  // Types that can be encoded densely in arrays
+  exports.CommonTypes = [
+    "string",
+    "object",
+    "array"
+  ];
+
   exports.FormatName = "estree-compressed-v3";
   exports.EnableVarints = true;
 

@@ -1,6 +1,10 @@
 {
   "shapeKey": "type",
   "shapes": {
+    "RegExp": {
+      "pattern": "String",
+      "flags": "String"
+    },
     "Program": {
       "body": [ "BlockStatement" ]
     },

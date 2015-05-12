@@ -145,11 +145,6 @@
           case "s":
             return module.strings[index];
 
-          case "r":
-            var source = module.strings[index];
-            var r = new RegExp(source);
-            return r;
-
           case "a":
             return module.arrays[index];
 
@@ -178,10 +173,44 @@
 
   function deserializeArrayContents (reader, module, arr) {
     var count = reader.readVarUint32();
+    var commonTypeIndex = reader.readByte();
 
-    for (var i = 0; i < count; i++) {
-      var value = deserializeTaggedValue(reader, module);
-      arr[i] = value;
+    if (commonTypeIndex === 0xFF) {
+      // Stream of tagged values
+      for (var i = 0; i < count; i++) {
+        var value = deserializeTaggedValue(reader, module);
+        arr[i] = value;
+      }
+    } else {
+      // Stream of indices into a specific table
+      var commonTypeName = common.CommonTypes[commonTypeIndex];
+      var table;
+
+      switch (commonTypeName) {
+        case "string":
+          table = module.strings;
+          break;
+
+        case "array":
+          table = module.arrays;
+          break;
+
+        case "object":
+          table = module.objects;
+          break;
+
+        default:
+          throw new Error("Unknown common type name: " + commonTypeName);
+      }
+
+      for (var i = 0; i < count; i++) {
+        var index = reader.readIndex();
+
+        if (index === 0xFFFFFFFF)
+          arr[i] = null;
+        else
+          arr[i] = table[index];
+      }
     }
   };
 
