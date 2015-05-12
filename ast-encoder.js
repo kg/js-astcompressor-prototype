@@ -92,8 +92,15 @@
       var lengthBytes = after - before;
       this.varintSizes[lengthBytes - 1] += 1;
     } else {
-      return this.writeUint32(value);
+      this.writeUint32(value);
     }
+  };
+
+  ValueWriter.prototype.writeIndex = function (value) {
+    if (value === 0xFFFFFFFF)
+      this.writeVarUint32(0);
+    else
+      this.writeVarUint32(value + 1);
   };
 
   ValueWriter.prototype.writeFloat64 = function (value) {
@@ -280,31 +287,31 @@
   };
 
 
-  JsAstModule.prototype.walkValue = function (key, value, callback) {
+  JsAstModule.prototype.walkValue = function (key, value, callback, callbackArg) {
     switch (typeof (value)) {
       case "string":
-        callback(key, "s", this.strings, value);
+        callback(key, "s", this.strings, value, callbackArg);
         break;
 
       case "number":
         var i = value | 0;
         if (i === value)
-          callback(key, "i", null, i);
+          callback(key, "i", null, i, callbackArg);
         else
-          callback(key, "d", null, value);
+          callback(key, "d", null, value, callbackArg);
         break;
 
       case "object":
         if (Array.isArray(value))
-          callback(key, "a", this.arrays, value);
+          callback(key, "a", this.arrays, value, callbackArg);
         else if (value && (Object.getPrototypeOf(value) === RegExp.prototype))
-          callback(key, "r", this.strings, value.source);
+          callback(key, "r", this.strings, value.source, callbackArg);
         else
-          callback(key, "o", this.objects, value);
+          callback(key, "o", this.objects, value, callbackArg);
         break;
 
       case "boolean":
-        callback(key, value ? "T" : "F");
+        callback(key, "b", null, value, callbackArg);
         break;
 
       default:
@@ -325,37 +332,34 @@
   };
 
 
-  function serializeValue (writer, typeToken, value) {
-    var typeCode = typeToken.charCodeAt(0) | 0;
-
-    writer.writeTagByte(typeCode);
-
+  function serializeValue (writer, integral, value) {
     if (typeof (value) === "undefined") {
     } else if (typeof (value) === "object") {
+      var index;
       if (value === null) {
         // Encode nulls as 0xFFFFFFFF table indices.
         // Inefficient, but provides for typed nulls and
         //  eliminates the 'n' type tag
-        writer.writeVarUint32(0xFFFFFFFF);
+        index = 0xFFFFFFFF;
       } else {
-        var index = value.get_index();
-        writer.writeVarUint32(index);
+        index = value.get_index();
       }
+      writer.writeIndex(index);
     } else if (typeof (value) === "number") {
-      if (typeToken === "i") {
+      if (integral) {
         writer.writeInt32(value);
       } else {
         writer.writeFloat64(value);
       }
+    } else if (typeof (value) === "boolean") {
+      writer.writeByte(value ? 1 : 0);
     } else {
-      console.log("Unhandled value [" + typeToken + "]", value);
+      console.log("Unhandled value", value);
     }
   }
 
-
-  function serializePair (
-    writer, serializeValue, 
-    key, typeToken, table, value
+  function extractSerializationValue (
+    table, value
   ) {
     if (table && (value !== null)) {
       var id = table.get_id(value);
@@ -364,10 +368,25 @@
       else if (typeof (id.get_index()) !== "number")
         throw new Error("Value has no index: " + value);
 
-      serializeValue(writer, typeToken, id);
-    } else {
-      serializeValue(writer, typeToken, value);
+      return id;
     }
+
+    return value;
+  }
+
+  function serializePair (
+    writer, serializeValue, 
+    key, typeToken, table, value
+  ) {
+    var typeCode = typeToken.charCodeAt(0) | 0;
+
+    writer.writeTagByte(typeCode);
+
+    var serializationValue = extractSerializationValue(table, value);
+
+    serializeValue(
+      writer, typeToken === "i", serializationValue
+    );
   };
 
 
@@ -384,13 +403,47 @@
 
     var shapeNameIndex = this.strings.get_index(shapeName);
 
-    writer.writeVarUint32(shapeNameIndex);
+    writer.writeIndex(shapeNameIndex);
 
-    var walkCallback = function (a, b, c, d) {
-      serializePair(
-        writer, serializeValue,
-        a, b, c, d
-      );
+    var walkCallback = function (key, typeToken, table, value, fieldDefinition) {
+      // If the type is known, omit the type tag
+      if (Array.isArray(fieldDefinition.type)) {
+        var serializationValue = extractSerializationValue(table, value);
+        serializeValue(writer, true, serializationValue);
+
+      } else switch (fieldDefinition.type) {
+        case "Boolean":
+          writer.writeByte(value ? 1 : 0);
+          break;
+
+        case "String":
+          var serializationValue = extractSerializationValue(table, value);
+          serializeValue(writer, true, serializationValue);
+          break;
+
+        case "Object":
+        default:
+          if (
+            (typeof (value) !== "object") || 
+            Array.isArray(value)
+          ) {
+            console.log(value);
+            throw new Error("Unexpected type '" + typeof(value) + "' for field '" + key + "'");
+          }
+
+          var serializationValue = extractSerializationValue(table, value);
+          serializeValue(writer, true, serializationValue);
+          break;
+
+        case "Any":
+          // Variant; emit type tag
+          serializePair(
+            writer, serializeValue,
+            key, typeToken, table, value
+          );
+
+          break;
+      }
     };
 
     var self = this, fields = shape.fields;
@@ -401,7 +454,7 @@
       if (typeof (value) === "undefined")
         value = null;
 
-      self.walkValue(fd.name, value, walkCallback);
+      self.walkValue(fd.name, value, walkCallback, fd);
     }
   };
 

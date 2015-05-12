@@ -77,6 +77,15 @@
     return result;
   };
 
+  ValueReader.prototype.readIndex = function () {
+    var indexRaw = this.readVarUint32();
+
+    if (indexRaw === 0)
+      return 0xFFFFFFFF;
+    else
+      return indexRaw - 1;
+  };
+
   ValueReader.prototype.readFloat64 = function () {
     if (!this.readScratchBytes(8))
       return false;
@@ -115,7 +124,7 @@
   };
 
 
-  function deserializeValue (reader, module) {
+  function deserializeTaggedValue (reader, module) {
     var typeCode = reader.readByte();
     if (typeCode === false)
       throw new Error("Truncated file");
@@ -127,7 +136,7 @@
       case "a":
       case "o":
       case "r": {
-        var index = reader.readVarUint32();
+        var index = reader.readIndex();
 
         if (index === 0xFFFFFFFF)
           return null;
@@ -152,17 +161,14 @@
         }
       }
 
+      case "b":
+        return Boolean(reader.readByte());
+
       case "i":
         return reader.readInt32();
 
       case "d":
         return reader.readFloat64();
-
-      case "T":
-        return true;
-
-      case "F":
-        return false;
 
       default:
         throw new Error("Unhandled value type " + typeToken);
@@ -174,14 +180,14 @@
     var count = reader.readVarUint32();
 
     for (var i = 0; i < count; i++) {
-      var value = deserializeValue(reader, module);
+      var value = deserializeTaggedValue(reader, module);
       arr[i] = value;
     }
   };
 
 
   function deserializeObjectContents (reader, module, obj) {
-    var shapeNameIndex = reader.readVarUint32();
+    var shapeNameIndex = reader.readIndex();
     var shapeName = module.strings[shapeNameIndex];
     if (!shapeName)
       throw new Error("Could not look up shape name #" + shapeNameIndex);    
@@ -193,7 +199,43 @@
 
     for (var i = 0, l = shape.fields.length; i < l; i++) {
       var fd = shape.fields[i];
-      var value = deserializeValue(reader, module);
+      var value, index;
+
+      if (Array.isArray(fd.type)) {
+        index = reader.readIndex();
+        if (index === 0xFFFFFFFF)
+          value = null;
+        else
+          value = module.arrays[index];
+      } else switch (fd.type) {
+        case "Boolean":
+          value = Boolean(reader.readByte());
+          break;
+
+        case "String":
+          index = reader.readIndex();
+          if (index === 0xFFFFFFFF)
+            value = null;
+          else
+            value = module.strings[index];
+
+          break;
+
+        case "Object":
+        default:
+          index = reader.readIndex();
+          if (index === 0xFFFFFFFF)
+            value = null;
+          else
+            value = module.objects[index];
+
+          break;
+
+        case "Any":
+          value = deserializeTaggedValue(reader, module);
+          break;
+      }
+
       obj[fd.name] = value;
     }    
   };
@@ -235,11 +277,34 @@
     for (var i = 0; i < count; i++) {
       var obj = module.objects[i];
       deserializeObjectContents(reader, module, obj);
-    }    
+    }
+  };
+
+
+  function findCycles (module) {
+    var root = module.objects[module.rootIndex];
+
+    var ctx = new astutil.Context();
+    ctx.onCycleDetected = function (v) {
+      var srcSemantic = ctx.parent.__semantic__;
+      var srcIndex = ctx.parent.__index__;
+      var dstSemantic = v.__semantic__;
+      var dstIndex = v.__index__;
+
+      console.log(
+        "Cycle detected:", srcSemantic, "#" + srcIndex + " ->",
+        dstSemantic, "#" + dstIndex
+      );
+      console.log(v);
+    };
+
+    astutil.mutate(root, function (context, node) {}, ctx);
   };
 
 
   function bytesToModule (bytes, shapes) {
+    var doCycleCheck = false;
+
     var reader = new ValueReader(bytes, 0, bytes.length);
 
     var magic = reader.readBytes(common.Magic.length);
@@ -270,10 +335,6 @@
         throw new Error("Truncated file");
       return text;
     };
-    var readDehydratedObject = function (reader) { 
-      return new Object(); 
-    };
-
     console.time("  read string tables");
     result.strings = deserializeTable(reader, readUtf8String);
     console.timeEnd("  read string tables");
@@ -281,13 +342,29 @@
     // Pre-allocate the objects and arrays for given IDs
     //  so that we can reconstruct relationships in one pass.
     result.objects   = new Array(objectCount);
-    for (var i = 0; i < objectCount; i++)
-      result.objects[i] = new Object();
+    for (var i = 0; i < objectCount; i++) {
+      var o = new Object();
+
+      if (doCycleCheck) {
+        o.__index__ = i;
+        o.__semantic__ = "Object";
+      }
+
+      result.objects[i] = o;
+    }
 
     result.arrays    = new Array(arrayCount);
-    for (var i = 0; i < arrayCount; i++)
+    for (var i = 0; i < arrayCount; i++) {
       // FIXME: This means we have to grow it when repopulating it. :-(
-      result.arrays[i] = new Array();
+      var a = new Array();
+
+      if (doCycleCheck) {
+        a.__index__ = i;
+        a.__semantic__ = "Array";
+      }
+
+      result.arrays[i] = a;
+    }
 
     console.time("  read objects");
     deserializeObjects(reader, result);
@@ -296,6 +373,9 @@
     console.time("  read arrays");
     deserializeArrays (reader, result);
     console.timeEnd("  read arrays");
+
+    if (doCycleCheck)
+      findCycles(result);
 
     return result;
   };

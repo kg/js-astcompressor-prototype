@@ -12,6 +12,9 @@ astutil.Context.prototype.abort = function () {
     this.isAborted = true;
 };
 
+astutil.Context.prototype.onCycleDetected = function (target) {    
+};
+
 
 astutil.Result = function () {
     this.parent = null;
@@ -76,8 +79,10 @@ astutil.mutate = function (root, mutator, context) {
             if (typeof(v) !== "object")
                 continue;
 
-            if (context.stack.indexOf(v) >= 0)
+            if (context.stack.indexOf(v) >= 0) {
+                context.onCycleDetected(v);
                 continue;
+            }
 
             context.parent = newRoot;
             context.key = k;
