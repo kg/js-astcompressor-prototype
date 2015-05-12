@@ -143,7 +143,7 @@
     var progressInterval = 100000;
 
     var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
-      if (table)
+      if (table && (value !== null))
         table.add(value);
 
       walkedCount++;
@@ -295,11 +295,9 @@
         break;
 
       case "object":
-        if (value === null)
-          callback(key, "N");
-        else if (Array.isArray(value))
+        if (Array.isArray(value))
           callback(key, "a", this.arrays, value);
-        else if (Object.getPrototypeOf(value) === RegExp.prototype)
+        else if (value && (Object.getPrototypeOf(value) === RegExp.prototype))
           callback(key, "r", this.strings, value.source);
         else
           callback(key, "o", this.objects, value);
@@ -332,10 +330,17 @@
 
     writer.writeTagByte(typeCode);
 
-    if ((typeof (value) === "undefined") || (value === null)) {
+    if (typeof (value) === "undefined") {
     } else if (typeof (value) === "object") {
-      var index = value.get_index();
-      writer.writeVarUint32(index);
+      if (value === null) {
+        // Encode nulls as 0xFFFFFFFF table indices.
+        // Inefficient, but provides for typed nulls and
+        //  eliminates the 'n' type tag
+        writer.writeVarUint32(0xFFFFFFFF);
+      } else {
+        var index = value.get_index();
+        writer.writeVarUint32(index);
+      }
     } else if (typeof (value) === "number") {
       if (typeToken === "i") {
         writer.writeInt32(value);
@@ -352,7 +357,7 @@
     writer, serializeValue, 
     key, typeToken, table, value
   ) {
-    if (table) {
+    if (table && (value !== null)) {
       var id = table.get_id(value);
       if (!id)
         throw new Error("Value not interned: " + value);
@@ -388,15 +393,15 @@
       );
     };
 
-    var self = this;
-    for (var i = 0, l = shape.fields.length; i < l; i++) {
-      var key = shape.fields[i];
-      var value = node[key];
+    var self = this, fields = shape.fields;
+    for (var i = 0, l = fields.length; i < l; i++) {
+      var fd = fields[i];
+      var value = node[fd.name];
 
       if (typeof (value) === "undefined")
         value = null;
 
-      self.walkValue(key, value, walkCallback);
+      self.walkValue(fd.name, value, walkCallback);
     }
   };
 

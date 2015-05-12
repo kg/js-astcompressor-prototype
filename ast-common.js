@@ -384,8 +384,10 @@
       var definition = new ShapeDefinition(k);
       var fields = parsed.shapes[k];
 
-      for (var j in fields)
-        definition.fields.push(j);
+      for (var j in fields) {
+        var fd = new FieldDefinition(j, fields[j]);
+        definition.fields.push(fd);
+      }
 
       result.add(k, definition);
     }
@@ -396,6 +398,12 @@
   ShapeTable.prototype = Object.create(NamedTable.prototype);
 
 
+  function FieldDefinition (name, type) {
+    this.name = name;
+    this.type = type;
+  };
+
+
   function ShapeDefinition (key) {
     this.key = key;
     this.fields = [];
@@ -403,12 +411,14 @@
 
 
   function writeLEBUint32 (byteWriter, value) {
+    var v = value;
+
     var b = 0;
     value |= 0;
 
     do {
       b = value & 0x7F;
-      value >>= 7;
+      value >>>= 7;
       if (value)
         b |= 0x80;
 
@@ -429,6 +439,7 @@
       shift += 7;
     }
 
+    result >>>= 0;
     return result;
   };
 

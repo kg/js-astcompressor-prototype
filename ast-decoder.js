@@ -129,6 +129,9 @@
       case "r": {
         var index = reader.readVarUint32();
 
+        if (index === 0xFFFFFFFF)
+          return null;
+
         switch (typeToken) {
           case "s":
             return module.strings[index];
@@ -154,9 +157,6 @@
 
       case "d":
         return reader.readFloat64();
-
-      case "N":
-        return null;
 
       case "T":
         return true;
@@ -192,9 +192,9 @@
     obj[module.shapes.shapeKey] = shapeName;
 
     for (var i = 0, l = shape.fields.length; i < l; i++) {
-      var key = shape.fields[i];
+      var fd = shape.fields[i];
       var value = deserializeValue(reader, module);
-      obj[key] = value;
+      obj[fd.name] = value;
     }    
   };
 
