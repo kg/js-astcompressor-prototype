@@ -47,15 +47,25 @@
   };
 
 
-  function isWhitespace (ch) {
-    return (ch === 32) || 
-      (ch === 9) ||
-      (ch === 10) ||
-      (ch === 13);
-  };
+  var _0 = "0".charCodeAt(0), _9 = "9".charCodeAt(0);
+  var _a = "a".charCodeAt(0), _z = "z".charCodeAt(0);
+  var _A = "A".charCodeAt(0), _Z = "Z".charCodeAt(0);
+  var __ = "_".charCodeAt(0), _$ = "$".charCodeAt(0);
 
-  var _0 = "0".charCodeAt(0);
-  var _9 = "9".charCodeAt(0);
+  var ForwardSlash = "/".charCodeAt(0);
+  var Asterisk     = "*".charCodeAt(0);
+  var DoubleQuote  = "\"".charCodeAt(0);
+  var SingleQuote  = "\'".charCodeAt(0);
+  var Period       = ".".charCodeAt(0);
+
+  var Tab = 9, CR = 10, LF = 13, Space = 32;
+
+  function isWhitespace (ch) {
+    return (ch === Space) || 
+      (ch === Tab) ||
+      (ch === CR) ||
+      (ch === LF);
+  };
 
   function isDigit (ch) {
     return (ch >= _0) && (ch <= _9);
@@ -65,8 +75,17 @@
     return (x === (x | 0)) || (x === (x >>> 0));
   };
 
-  var _forwardSlash = "/".charCodeAt(0);
-  var _asterisk     = "*".charCodeAt(0);
+  function isIdentifierPrefix (ch) {
+    return ((ch >= _a) && (ch <= _z)) ||
+      ((ch >= _A) && (ch <= _Z)) ||
+      (ch === __) ||
+      (ch === _$);
+  };
+
+  function isIdentifierBody (ch) {
+    return isIdentifierBody(ch) ||
+      ((ch >= _0) && (ch <= _9));
+  }
 
   // Devour whitespace & comments from the reader
   function skipDeadSpace (reader) {
@@ -76,29 +95,29 @@
       if (isWhitespace(ch)) {
         reader.read();
         continue;
-      } else if (ch === _forwardSlash) {
+      } else if (ch === ForwardSlash) {
         var ch2 = reader.peek(1);
 
-        if (ch2 === _forwardSlash) {
+        if (ch2 === ForwardSlash) {
           // Greedily parse single-line comment
           reader.skip(2);
 
           while (
             !reader.eof && 
-            (ch !== 10) && 
-            (ch !== 13)
+            (ch !== CR) && 
+            (ch !== LF)
           ) {
             ch = reader.read();
           };
 
           continue;
-        } else if (ch2 === _asterisk) {
+        } else if (ch2 === Asterisk) {
           reader.skip(2);
 
           while (
             !reader.eof && 
-            (ch  !== _asterisk) && 
-            (ch2 !== _forwardSlash)
+            (ch  !== Asterisk) && 
+            (ch2 !== ForwardSlash)
           ) {
             ch = reader.read();
             ch2 = reader.peek(1);
@@ -118,9 +137,74 @@
   // input is a ByteReader (see encoding.js)
   function Tokenizer (input) {
     this.reader = input;
+
+    this._temporaryResult = {
+      type: "",
+      value: null
+    };
+  };
+
+  Tokenizer.prototype.assert = function (cond) {
+    if (!cond)
+      throw new Error("Assertion failed");
   };
 
   Tokenizer.prototype.read = function () {
+    skipDeadSpace(this.reader);
+
+    var ch  = this.reader.peek(0),
+        ch2 = this.reader.peek(1);
+
+    this.assert(!isWhitespace(ch));
+
+    if (isIdentifierPrefix(ch)) {
+      return this.readIdentifier(ch);
+    } else if (
+      (ch === SingleQuote) ||
+      (ch === DoubleQuote)
+    ) {
+      return this.readStringLiteral(ch);
+    } else if (
+      isDigit(ch) || 
+      ((ch === Period) && isDigit(ch2))
+    ) {
+      return this.readNumberLiteral(ch, ch2);
+    } else {
+      console.log("Initial character not implemented: " + String.fromCharCode(ch));
+      return false;
+    }
+
+    return false;
+  };
+
+  Tokenizer.prototype.readIdentifier = function (ch) {
+    this._temporaryResult.type = "identifier";
+    this._temporaryResult.value = null;
+
+    return this._temporaryResult;
+  };
+
+  Tokenizer.prototype.readStringLiteral = function (quote) {
+    var result = "";
+    var ch;
+
+    this.reader.skip(1);
+
+    while ((ch = this.reader.read()) !== quote) {
+      result += String.fromCharCode(ch);
+    }
+
+    this._temporaryResult.type = "string";
+    this._temporaryResult.value = result;
+
+    return this._temporaryResult;
+  };
+
+  Tokenizer.prototype.readNumberLiteral = function (ch, ch2) {
+    this._temporaryResult.type = "number";
+    this._temporaryResult.value = null;
+    
+    return this._temporaryResult;
   };
 
 
@@ -134,5 +218,7 @@
 
   exports.JsonTreeBuilder = JsonTreeBuilder;
   exports.Tokenizer = Tokenizer;
+
+  exports.skipDeadSpace = skipDeadSpace;
   exports.parse = parse;
 }));

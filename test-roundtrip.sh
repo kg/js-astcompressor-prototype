@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+
 if [ -z $1 ]; then
 FILE_PREFIX=ast-encoder.js
 INFILE=./ast-encoder.js ;

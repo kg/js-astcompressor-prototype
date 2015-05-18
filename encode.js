@@ -36,6 +36,18 @@ if (false) {
   console.timeEnd("parse");
 }
 
+if (true) {
+  var inputReader = encoding.makeCharacterReader(inputJs);
+  var tokenizer = new asmParse.Tokenizer(inputReader);
+
+  var token;
+  while ((token = tokenizer.read()) !== false) {
+    console.log(token);
+  }
+
+  process.exit(1);
+}
+
 console.time("esprima parse");
 var inputAst = esprima.parse(inputJs);
 console.timeEnd("esprima parse");
