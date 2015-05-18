@@ -100,14 +100,20 @@ encoding.makeByteReader = function (bytes, index, count) {
   else
     endpoint = (bytes.length - position);
 
-  var result = {
-    read: function () {
-      if (position >= endpoint)
-        return false;
+  var peek = function peek (offset) {
+    offset |= 0;
+    if (position + offset >= endpoint)
+      return false;
 
-      var nextByte = bytes[position];
+    return bytes[position + offset];
+  };
+
+  var result = {
+    peek: peek,
+    read: function () {
+      var result = peek(0);
       position += 1;
-      return nextByte;
+      return result;
     },
     getPosition: function () {
       return position;
@@ -133,14 +139,20 @@ encoding.makeCharacterReader = function (str) {
   var position = 0, length = str.length;
   var cca = encoding.charCodeAt;
 
-  var result = {
-    read: function () {
-      if (position >= length)
-        return false;
+  var peek = function peek (offset) {
+    offset |= 0;
+    if (position + offset >= length)
+      return false;
 
-      var nextChar = cca(str, position);
+    return cca(str, position + offset);
+  };
+
+  var result = {
+    peek: peek,
+    read: function () {
+      var result = peek(0);
       position += 1;
-      return nextChar;
+      return result;
     },
     getPosition: function () {
       return position;

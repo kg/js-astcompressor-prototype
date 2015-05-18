@@ -6,6 +6,7 @@ require('./Upstream/encoding/encoding.js');
 
 var esprima = require('./Upstream/esprima/');
 var escodegen = require('./Upstream/escodegen/escodegen.browser.js').escodegen;
+var asmParse = require('./parse/asmParse.js');
 var astEncoder = require('./ast-encoder.js');
 var fs = require('fs');
 
@@ -25,6 +26,15 @@ var shapes = astEncoder.ShapeTable.fromJson(
 
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
+
+if (false) {
+  console.time("parse");
+  var inputReader = encoding.makeCharacterReader(inputJs);
+  var astBuilder = new asmParse.JsonTreeBuilder();
+  asmParse.parse(inputReader, astBuilder);
+  var inputAst = astBuilder.result;
+  console.timeEnd("parse");
+}
 
 console.time("esprima parse");
 var inputAst = esprima.parse(inputJs);
