@@ -37,14 +37,16 @@ if (false) {
 }
 
 if (true) {
+  console.time("tokenize");
   var inputReader = encoding.makeCharacterReader(inputJs);
   var tokenizer = new asmParse.Tokenizer(inputReader);
 
   var token;
   while ((token = tokenizer.read()) !== false) {
-    process.stdout.write(token.value + " ");
+    ;
   }
 
+  console.timeEnd("tokenize");
   process.exit(1);
 }
 

@@ -202,7 +202,16 @@
     ) {
       return this.readSeparator(ch);
     } else {
-      console.log("Initial character not implemented: '" + String.fromCharCode(ch) + "' (" + ch + ")");
+      var ch$2 = this.reader.peek(-2), 
+        ch$1 = this.reader.peek(-1), 
+        ch3 = this.reader.peek(2); 
+
+      console.log(
+        "Initial character not implemented: '" + String.fromCharCode(ch) + 
+        "' (" + ch + ") at offset " + 
+        this.reader.getPosition() + ", surrounding: '" +
+        String.fromCharCode(ch$2, ch$1, ch, ch2, ch3) + "'"
+      );
       return false;
     }
 
@@ -280,6 +289,21 @@
 
         break;
 
+      case ForwardSlash:
+        // HACK: Heuristically figure out whether this is a regexp. UGH
+        if (
+          (this._temporaryResult.type === "operator") ||
+          (
+            (this._temporaryResult.type === "separator") &&
+            (this._temporaryResult.value !== ")") &&
+            (this._temporaryResult.value !== "]")
+          )
+        ) {
+          return this.readRegExpLiteral();
+        }
+
+        // Fall through
+
       default:
         if (
           (MutationAssignmentChars.indexOf(ch) >= 0) &&
@@ -323,7 +347,7 @@
 
     this.reader.skip(1);
 
-    while ((ch = this.reader.read()) !== quote) {
+    while (((ch = this.reader.read()) !== quote) && ch) {
       result += String.fromCharCode(ch);
 
       // HACK: Ensure \' and \" are read in their entirety
@@ -371,6 +395,46 @@
 
     this.reader.skip(temp.length);
     
+    return this._temporaryResult;
+  };
+
+  Tokenizer.prototype.readRegExpLiteral = function () {
+    var ch;
+
+    // Skip opening /
+    this.reader.skip(1);
+
+    // Read body of the regexp pattern
+    var body = "";
+    while (((ch = this.reader.read()) !== ForwardSlash) && ch) {
+      if (ch === BackSlash) {
+        // Read escaped character
+        // FIXME: \x00 and \u0000
+
+        body += "\\";
+        ch = this.reader.read();
+      }
+
+      body += String.fromCharCode(ch);
+    }
+
+    // Read regexp flags
+    // FIXME: Is this right?
+    var flags = "";
+    while ((ch = this.reader.peek()) !== false) {
+      if (
+        ((ch >= _a) && (ch <= _z)) ||
+        ((ch >= _A) && (ch <= _Z))
+      ) {
+        flags += String.fromCharCode(ch);
+        this.reader.read();
+      } else
+        break;
+    }
+
+    this._temporaryResult.type = "regexp";
+    this._temporaryResult.value = new RegExp(body, flags);
+
     return this._temporaryResult;
   };
 
