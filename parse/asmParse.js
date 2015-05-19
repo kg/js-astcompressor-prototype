@@ -69,7 +69,7 @@
 
   var Tab = 9, CR = 10, LF = 13, Space = 32;
 
-  var DigitChars = Array.prototype.slice.call("0123456789abcdefx.")
+  var DigitChars = Array.prototype.slice.call("0123456789abcdefxABCDEFX.")
     .map(function (ch) { return ch.charCodeAt(0); });
 
   var OperatorInitialChars = Array.prototype.slice.call("!%&*+,-./:<=>?^|~")
