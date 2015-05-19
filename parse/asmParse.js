@@ -358,7 +358,12 @@
       temp += String.fromCharCode(ch);
     }
 
-    this._temporaryResult.value = parseFloat(temp);
+    if (!isDouble) {
+      this._temporaryResult.value = parseInt(temp);
+    } else {
+      this._temporaryResult.value = parseFloat(temp);
+    }
+
     if (is32Bit(this._temporaryResult.value) && !isDouble)
       this._temporaryResult.type = "integer";
     else
