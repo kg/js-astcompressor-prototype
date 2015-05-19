@@ -53,12 +53,30 @@
   var __ = "_".charCodeAt(0), _$ = "$".charCodeAt(0);
 
   var ForwardSlash = "/".charCodeAt(0);
+  var BackSlash    = "\\".charCodeAt(0);
   var Asterisk     = "*".charCodeAt(0);
   var DoubleQuote  = "\"".charCodeAt(0);
   var SingleQuote  = "\'".charCodeAt(0);
   var Period       = ".".charCodeAt(0);
+  var LessThan     = "<".charCodeAt(0);
+  var GreaterThan  = ">".charCodeAt(0);
+  var Equal        = "=".charCodeAt(0);
+  var Minus        = "-".charCodeAt(0);
+  var Plus         = "+".charCodeAt(0);
 
   var Tab = 9, CR = 10, LF = 13, Space = 32;
+
+  var DigitChars = Array.prototype.slice.call("0123456789abcdefx.")
+    .map(function (ch) { return ch.charCodeAt(0); });
+
+  var OperatorInitialChars = Array.prototype.slice.call("!%&*+,-./:<=>?^|~")
+    .map(function (ch) { return ch.charCodeAt(0); });
+
+  var MutationAssignmentChars = Array.prototype.slice.call("!%&*+-/^|~")
+    .map(function (ch) { return ch.charCodeAt(0); });
+
+  var Separators = Array.prototype.slice.call("([];{})")
+    .map(function (ch) { return ch.charCodeAt(0); });
 
   function isWhitespace (ch) {
     return (ch === Space) || 
@@ -83,7 +101,7 @@
   };
 
   function isIdentifierBody (ch) {
-    return isIdentifierBody(ch) ||
+    return isIdentifierPrefix(ch) ||
       ((ch >= _0) && (ch <= _9));
   }
 
@@ -152,6 +170,9 @@
   Tokenizer.prototype.read = function () {
     skipDeadSpace(this.reader);
 
+    if (this.reader.eof)
+      return false;
+
     var ch  = this.reader.peek(0),
         ch2 = this.reader.peek(1);
 
@@ -169,17 +190,102 @@
       ((ch === Period) && isDigit(ch2))
     ) {
       return this.readNumberLiteral(ch, ch2);
+    } else if (
+      OperatorInitialChars.indexOf(ch) >= 0
+    ) {
+      return this.readOperator(ch, ch2);
+    } else if (
+      Separators.indexOf(ch) >= 0
+    ) {
+      return this.readSeparator(ch);
     } else {
-      console.log("Initial character not implemented: " + String.fromCharCode(ch));
+      console.log("Initial character not implemented: '" + String.fromCharCode(ch) + "' (" + ch + ")");
       return false;
     }
 
     return false;
   };
 
+  Tokenizer.prototype.readOperator = function (ch, ch2) {
+    var length = 1;
+
+    switch (ch) {
+      case LessThan:
+        length = (
+            (ch2 === LessThan) ||
+            (ch2 === Equal)
+          ) ? 2 : 1;
+
+        break;
+
+      case GreaterThan:
+        length = (
+            (ch2 === GreaterThan) &&
+            (this.reader.peek(2) === GreaterThan)
+          ) ? 3 : (
+            (ch2 === GreaterThan) ||
+            (ch2 === Equal)
+          ) ? 2 : 1;
+
+        break;
+
+      case Equal:
+        length = (
+            (ch2 === Equal) &&
+            (this.reader.peek(2) === Equal)
+          ) ? 3 : (ch2 === Equal) ? 2 : 1;
+
+        break;
+
+      case Minus:
+        length = (
+          (ch2 === Minus) ||
+          (ch2 === Equal)
+        ) ? 2 : 1;
+
+        break;
+
+      case Plus:
+        length = (
+          (ch2 === Plus) ||
+          (ch2 === Equal)
+        ) ? 2 : 1;
+
+        break;
+
+      default:
+        if (
+          (MutationAssignmentChars.indexOf(ch) >= 0) &&
+          (ch2 === Equal)
+        )
+          length = 2;
+
+        break;
+    }
+
+    this._temporaryResult.type = "operator";
+    this._temporaryResult.value = String.fromCharCode(ch);
+
+    for (var i = 1; i < length; i++)
+      this._temporaryResult.value += String.fromCharCode(this.reader.peek(i));
+
+    this.reader.skip(length);
+
+    return this._temporaryResult;
+  };
+
   Tokenizer.prototype.readIdentifier = function (ch) {
     this._temporaryResult.type = "identifier";
-    this._temporaryResult.value = null;
+
+    var temp = String.fromCharCode(ch);
+    this.reader.skip(1);
+
+    while ((ch = this.reader.peek(0)) && isIdentifierBody(ch)) {
+      temp += String.fromCharCode(ch);
+      this.reader.skip(1);
+    }
+
+    this._temporaryResult.value = temp;
 
     return this._temporaryResult;
   };
@@ -192,6 +298,13 @@
 
     while ((ch = this.reader.read()) !== quote) {
       result += String.fromCharCode(ch);
+
+      // HACK: Ensure \' and \" are read in their entirety
+      // TODO: Actually parse out the escape sequences into regular chars?
+      if (ch === BackSlash) {
+        ch = this.reader.read();
+        result += String.fromCharCode(ch);
+      }
     }
 
     this._temporaryResult.type = "string";
@@ -201,9 +314,40 @@
   };
 
   Tokenizer.prototype.readNumberLiteral = function (ch, ch2) {
-    this._temporaryResult.type = "number";
-    this._temporaryResult.value = null;
+    // UGH
+    var temp = "";
+    var isDouble = false;
+    for (var i = 0; i < 16; i++) {
+      var ch = this.reader.peek(i);
+
+      if (ch === false)
+        break;
+      else if (DigitChars.indexOf(ch) < 0)
+        break;
+
+      if (ch === Period)
+        isDouble = true;
+
+      temp += String.fromCharCode(ch);
+    }
+
+    this._temporaryResult.value = parseFloat(temp);
+    if (is32Bit(this._temporaryResult.value) && !isDouble)
+      this._temporaryResult.type = "integer";
+    else
+      this._temporaryResult.type = "double";
+
+    this.reader.skip(temp.length);
     
+    return this._temporaryResult;
+  };
+
+  Tokenizer.prototype.readSeparator = function (ch) {
+    this._temporaryResult.type = "separator";
+    this._temporaryResult.value = String.fromCharCode(ch);
+
+    this.reader.skip(1);
+
     return this._temporaryResult;
   };
 
