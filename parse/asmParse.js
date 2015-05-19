@@ -63,6 +63,9 @@
   var Equal        = "=".charCodeAt(0);
   var Minus        = "-".charCodeAt(0);
   var Plus         = "+".charCodeAt(0);
+  var Exclamation  = "!".charCodeAt(0);
+  var Ampersand    = "&".charCodeAt(0);
+  var Pipe         = "|".charCodeAt(0);
 
   var Tab = 9, CR = 10, LF = 13, Space = 32;
 
@@ -250,6 +253,30 @@
           (ch2 === Plus) ||
           (ch2 === Equal)
         ) ? 2 : 1;
+
+        break;
+
+      case Ampersand:
+        length = (
+          (ch2 === Ampersand) ||
+          (ch2 === Equal)
+        ) ? 2 : 1;
+
+        break;
+
+      case Pipe:
+        length = (
+          (ch2 === Pipe) ||
+          (ch2 === Equal)
+        ) ? 2 : 1;
+
+        break;
+
+      case Exclamation:
+        length = (
+            (ch2 === Equal) &&
+            (this.reader.peek(2) === Equal)
+          ) ? 3 : (ch2 === Equal) ? 2 : 1;
 
         break;
 

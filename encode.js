@@ -42,7 +42,8 @@ if (true) {
 
   var token;
   while ((token = tokenizer.read()) !== false) {
-    console.log(token);
+    if (token.type === "operator")
+      console.log(token);
   }
 
   process.exit(1);
