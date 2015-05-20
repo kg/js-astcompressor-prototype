@@ -6,7 +6,7 @@ require('./Upstream/encoding/encoding.js');
 
 var esprima = require('./Upstream/esprima/');
 var escodegen = require('./Upstream/escodegen/escodegen.browser.js').escodegen;
-var asmParse = require('./parse/asmParse.js');
+var asmParse = require('./parse/asm-parse.js');
 var astEncoder = require('./ast-encoder.js');
 var fs = require('fs');
 
