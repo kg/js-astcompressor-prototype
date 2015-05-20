@@ -235,6 +235,7 @@
     sourceEntry.id.redirect(targetEntry);
 
     this.entries[sourceEntry.name] = targetEntry;
+    targetEntry.hitCount += 1;
   };
 
   NamedTable.prototype.finalize = function (ordered) {
