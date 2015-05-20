@@ -27,7 +27,7 @@ var shapes = astEncoder.ShapeTable.fromJson(
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
-if (false) {
+if (true) {
   console.time("parse");
   var inputReader = encoding.makeCharacterReader(inputJs);
   var astBuilder = new asmParse.JsonTreeBuilder();
@@ -36,7 +36,7 @@ if (false) {
   console.timeEnd("parse");
 }
 
-if (true) {
+if (false) {
   console.time("tokenize");
   var inputReader = encoding.makeCharacterReader(inputJs);
   var tokenizer = new asmParse.Tokenizer(inputReader);
