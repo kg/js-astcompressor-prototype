@@ -50,7 +50,13 @@
     return result;
   };
 
-  JsonTreeBuilder.prototype.makeLiteralExpression = function (name, argumentNames, body) {
+  JsonTreeBuilder.prototype.makeFunctionStatement = function (functionExpression) {
+    var result = this.make("FunctionStatement");
+    result.functionExpression = functionExpression;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     var result = this.make("Function");
     result.name = name;
     result.argumentNames = argumentNames;
@@ -148,16 +154,21 @@
     }
   };
 
-  // Parses an identifier into an expression. Most identifiers are a single token,
+  // Parses an identifier into an expression or statement. Most identifiers are a single token,
   //  but we special-case ones like 'function' by parsing the stuff that follows.
   Parser.prototype.parseIdentifier = function (initialToken) {
     if (initialToken.type !== "identifier")
       return this.abort("Expected an identifier");
 
-    if (initialToken.value === "function") {
-      return this.parseFunctionExpression();
-    } else {
-      return this.builder.makeIdentifierExpression(initialToken.value);
+    switch (initialToken.value) {
+      case "function":
+        return this.parseFunctionExpression();
+
+      case "if":
+        return this.parseIfStatement();
+
+      default:
+        return this.builder.makeIdentifierExpression(initialToken.value);
     }
   }
 
@@ -317,9 +328,7 @@
 
             case "(":              
               expr = this.parseExpression(true);
-              stmt = this.builder.makeExpressionStatement(expr);
-
-              return stmt;
+              break iter;
 
             default:
               // Fall-through
@@ -328,11 +337,22 @@
         default:
           this.rewind(token);
           expr = this.parseExpression(false);
-          stmt = this.builder.makeExpressionStatement(expr);
-
-          return stmt;
+          break iter;
 
       }
+    }
+
+    if (expr) {
+      if (expr.type.indexOf("Statement"))
+        // HACK: If parsing produced a statement instead of an expression,
+        //  just use it
+        return expr;
+      else if (expr.type === "Function")
+        // HACK: If parsing produced a free-standing function expression,
+        //  convert it to a function statement
+        return this.builder.makeFunctionStatement(expr);
+      else
+        return this.builder.makeExpressionStatement(expr);
     }
 
     this.abort("No tokens read");
