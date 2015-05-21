@@ -44,6 +44,14 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeIfStatement = function (condition, trueStatement, falseStatement) {
+    var result = this.make("IfStatement");
+    result.condition = condition;
+    result.trueStatement = trueStatement;
+    result.falseStatement = falseStatement;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionStatement = function (functionExpression) {
     var result = this.make("FunctionStatement");
     result.functionExpression = functionExpression;

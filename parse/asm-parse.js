@@ -101,7 +101,17 @@
       default:
         return this.builder.makeIdentifierExpression(initialToken.value);
     }
-  }
+  };
+
+  Parser.prototype.parseIfStatement = function () {
+    this.expectToken("separator", "(");
+
+    var cond = this.parseExpression();
+
+    var trueStatement = this.parseStatement();
+
+    return this.builder.makeIfStatement(cond, trueStatement, null);    
+  };
 
   Parser.prototype.parseFunctionExpression = function () {
     var name = null;
