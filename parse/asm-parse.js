@@ -50,10 +50,16 @@
     return result;
   };
 
-  JsonTreeBuilder.prototype.makeLiteral = function (type, value) {
+  JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
     var result = this.make("Literal");
     result.valueType = type;
     result.value = value;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeIdentifierExpression = function (identifier) {
+    var result = this.make("Identifier");
+    result.identifier = identifier;
     return result;
   };
 
@@ -71,12 +77,28 @@
   function Parser (tokenizer, treeBuilder) {
     this.tokenizer = tokenizer;
     this.builder = treeBuilder;
+    this._rewound = null;
   };
 
   Parser.prototype.readToken = function () {
-    var result = this.tokenizer.read();
+    var result;
+
+    if (this._rewound) {
+      result = this._rewound;
+      this._rewound = null;
+    } else {
+      result = this.tokenizer.read();
+    }
+
     console.log(result);
     return result;
+  };
+
+  Parser.prototype.rewind = function (token) {
+    if (this._rewound)
+      throw new Error("Already rewound");
+    else
+      this._rewound = token;
   };
 
   Parser.prototype.abort = function () {
@@ -105,6 +127,91 @@
     }
   };
 
+  // Parses an identifier into an expression. Most identifiers are a single token,
+  //  but we special-case ones like 'function' by parsing the stuff that follows.
+  Parser.prototype.parseIdentifier = function (initialToken) {
+    if (initialToken.type !== "identifier")
+      return this.abort("Expected an identifier");
+
+    if (initialToken.value === "function") {
+      this.abort("Function");
+    } else {
+      return this.builder.makeIdentifierExpression(initialToken.value);
+    }
+  }
+
+  // Parses a single expression. If it encounters a ( it handles nesting.
+  Parser.prototype.parseExpression = function (isNested) {
+    var token = null, lhs = null;
+
+    iter:
+    while (token = this.readToken()) {
+      switch (token.type) {
+        case "separator":
+
+          switch (token.value) {
+            case "(":
+              // Subexpression or function invocation
+
+              if (lhs) {
+                // Function invocation
+                lhs = this.builder.makeInvocationExpression(
+                  lhs, this.parseArgumentList()
+                );
+              } else {
+                // Subexpression
+                lhs = this.parseExpression(true);
+              }
+
+              break;
+
+            case ")":
+              // Subexpression terminator
+              if (isNested)
+                break iter;
+              else
+                return this.abort("Unexpected ) within free-standing expression");
+
+            case "{":
+              // Object literal
+              return this.abort("object literal");
+
+            case "[":
+              // Array literal
+              return this.abort("array literal");
+
+            case ";":
+              // End of enclosing statement.
+              if (isNested)
+                return this.abort("Unexpected ; within parenthesized expression");
+              else
+                break iter;
+
+            default:
+
+              return this.abort("Unexpected ", token);
+          }
+
+          break;
+
+        case "identifier":
+          lhs = this.parseIdentifier(token);
+          break;
+
+        case "integer":
+        case "double":
+        case "string":
+          lhs = this.builder.makeLiteralExpression(token.type, token.value);
+          break;
+      }
+    }
+
+    if (!lhs)
+      this.abort("No expression parsed");
+
+    return lhs;
+  };
+
   // parses a single statement, returns false if it hit a block-closing token.
   // handles nested blocks.
   Parser.prototype.parseStatement = function (block) {
@@ -113,41 +220,45 @@
     iter:
     while (token = this.readToken()) {
       switch (token.type) {
-
         case "separator":
           // Read nested block scope. Meaningless, but important to parse
           //  correctly.
-          if (
-            (token.value === "{")
-          ) {
-            var childBlock = this.builder.makeBlock();
-            stmt = this.builder.makeBlockStatement(childBlock);
 
-            this.parseBlockInterior(childBlock);
+          switch (token.value) {
+            case "{":
+              var childBlock = this.builder.makeBlock();
+              stmt = this.builder.makeBlockStatement(childBlock);
 
-            return stmt;
-          } else if (token.value === "}") {
-            return false;
-          } else if (token.value === ";") {
-            // HACK: Just skip stray semicolons. We don't care about
-            //  no-op statements, and this lets us avoid conditionally
-            //  eating a trailing ;.
-            continue iter;
-          } else {
-            this.abort("Unexpected token", token);
+              this.parseBlockInterior(childBlock);
+
+              return stmt;
+
+            case "}":
+              return false;
+
+            case ";":
+              // HACK: Just skip stray semicolons. We don't care about
+              //  no-op statements, and this lets us avoid conditionally
+              //  eating a trailing ;.
+              continue iter;
+
+            case "(":              
+              expr = this.parseExpression(true);
+              stmt = this.builder.makeExpressionStatement(expr);
+
+              return stmt;
+
+            default:
+              // Fall-through
           }
 
-        case "string":
-        case "integer":
-        case "double":
-          // Free-standing literal.
-          expr = this.builder.makeLiteral(token.type, token.value);
+        default:
+          this.rewind(token);
+          expr = this.parseExpression(false);
           stmt = this.builder.makeExpressionStatement(expr);
 
           return stmt;
 
-        default:
-          this.abort("Unexpected token", token);
       }
     }
 
