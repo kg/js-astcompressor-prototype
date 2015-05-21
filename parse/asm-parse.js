@@ -50,6 +50,14 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeLiteralExpression = function (name, argumentNames, body) {
+    var result = this.make("Function");
+    result.name = name;
+    result.argumentNames = argumentNames;
+    result.body = body;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
     var result = this.make("Literal");
     result.valueType = type;
@@ -101,6 +109,19 @@
       this._rewound = token;
   };
 
+  Parser.prototype.expectToken = function (type, value) {
+    var token = this.readToken();
+    if (token.type === type) {
+      if ((arguments.length === 2) && (token.value !== value)) {
+        return this.abort("Expected a '" + type + "' with value '" + value + "', got '" + token.value + "'");
+      } else {
+        return token.value;
+      }
+    }
+
+    return this.abort("Expected a token of type '" + type + "', got '" + token.type + "'.");
+  };
+
   Parser.prototype.abort = function () {
     console.log.apply(console, arguments);
     throw new Error(arguments[0] || "Aborted");
@@ -134,11 +155,64 @@
       return this.abort("Expected an identifier");
 
     if (initialToken.value === "function") {
-      this.abort("Function");
+      return this.parseFunctionExpression();
     } else {
       return this.builder.makeIdentifierExpression(initialToken.value);
     }
   }
+
+  Parser.prototype.parseFunctionExpression = function () {
+    var name = null;
+
+    var token = this.readToken();
+    if (token.type === "identifier") {
+      name = token.value;
+
+      this.expectToken("separator", "(");
+    } else if (
+      (token.type !== "separator") ||
+      (token.value !== "(")
+    ) {
+      return this.abort("Expected a function name or an argument name list");
+    }
+
+    var argumentNames = [];
+
+    token = this.readToken();
+
+    while (
+      (token = this.readToken()) && 
+      (
+        (token.type === "identifier") ||
+        (
+          (token.type === "operator") &&
+          (token.value === ",")
+        )
+      )
+    ) {
+
+      if (token.type === "identifier")
+        argumentNames.push(token.value);
+      else;
+        // Ignore comma
+    }
+
+    if (
+      (token.type !== "separator") ||
+      (token.value !== ")")
+    ) {
+      return this.abort("Expected an argument name list terminator or another argument name");
+    }
+
+    this.expectToken("separator", "{");
+
+    var body = this.builder.makeBlock();
+    this.parseBlockInterior();
+
+    return this.builder.makeFunctionExpression(
+      name, argumentNames, body
+    );
+  };
 
   // Parses a single expression. If it encounters a ( it handles nesting.
   Parser.prototype.parseExpression = function (isNested) {
@@ -188,7 +262,6 @@
                 break iter;
 
             default:
-
               return this.abort("Unexpected ", token);
           }
 
@@ -207,7 +280,7 @@
     }
 
     if (!lhs)
-      this.abort("No expression parsed");
+      return this.abort("No expression parsed");
 
     return lhs;
   };
