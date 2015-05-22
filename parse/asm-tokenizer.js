@@ -150,8 +150,14 @@
   // input is a ByteReader (see encoding.js)
   function Tokenizer (input) {
     this.reader = input;
+    this._previous = null;
+  };
 
-    this._temporaryResult = new Token("", null);
+  Tokenizer.prototype.makeResult = function (type, value) {
+    var result = new Token(type, value);
+    // HACK
+    this._previous = result;
+    return result;
   };
 
   Tokenizer.prototype.assert = function (cond) {
@@ -283,11 +289,11 @@
       case ForwardSlash:
         // HACK: Heuristically figure out whether this is a regexp. UGH
         if (
-          (this._temporaryResult.type === "operator") ||
+          (this._previous.type === "operator") ||
           (
-            (this._temporaryResult.type === "separator") &&
-            (this._temporaryResult.value !== ")") &&
-            (this._temporaryResult.value !== "]")
+            (this._previous.type === "separator") &&
+            (this._previous.value !== ")") &&
+            (this._previous.value !== "]")
           )
         ) {
           return this.readRegExpLiteral();
@@ -305,15 +311,14 @@
         break;
     }
 
-    this._temporaryResult.type = "operator";
-    this._temporaryResult.value = String.fromCharCode(ch);
+    var text = String.fromCharCode(ch);
 
     for (var i = 1; i < length; i++)
-      this._temporaryResult.value += String.fromCharCode(this.reader.peek(i));
+      text += String.fromCharCode(this.reader.peek(i));
 
     this.reader.skip(length);
 
-    return this._temporaryResult;
+    return this.makeResult("operator", text);
   };
 
   Tokenizer.prototype.readIdentifier = function (ch) {
@@ -325,16 +330,13 @@
       this.reader.skip(1);
     }
 
-    this._temporaryResult.value = temp;
-
-    this._temporaryResult.type = 
-      (KeywordOperators[temp] === true)
+    var typeString = (KeywordOperators[temp] === true)
         ? "operator"
         : (KeywordLookup[temp] === true)
             ? "keyword"
             : "identifier";
 
-    return this._temporaryResult;
+    return this.makeResult(typeString, temp);
   };
 
   Tokenizer.prototype.readStringLiteral = function (quote) {
@@ -354,10 +356,7 @@
       }
     }
 
-    this._temporaryResult.type = "string";
-    this._temporaryResult.value = result;
-
-    return this._temporaryResult;
+    return this.makeResult("string", result);
   };
 
   Tokenizer.prototype.readNumberLiteral = function (ch, ch2) {
@@ -378,20 +377,20 @@
       temp += String.fromCharCode(ch);
     }
 
+    var value;
+
     if (!isDouble) {
-      this._temporaryResult.value = parseInt(temp);
+      value = parseInt(temp);
     } else {
-      this._temporaryResult.value = parseFloat(temp);
+      value = parseFloat(temp);
     }
 
-    if (is32Bit(this._temporaryResult.value) && !isDouble)
-      this._temporaryResult.type = "integer";
-    else
-      this._temporaryResult.type = "double";
-
     this.reader.skip(temp.length);
-    
-    return this._temporaryResult;
+
+    if (is32Bit(value) && !isDouble)
+      return this.makeResult("integer", value);
+    else
+      return this.makeResult("double", value);
   };
 
   Tokenizer.prototype.readRegExpLiteral = function () {
@@ -428,19 +427,13 @@
         break;
     }
 
-    this._temporaryResult.type = "regexp";
-    this._temporaryResult.value = new RegExp(body, flags);
-
-    return this._temporaryResult;
+    return this.makeResult("regexp", new RegExp(body, flags));
   };
 
   Tokenizer.prototype.readSeparator = function (ch) {
-    this._temporaryResult.type = "separator";
-    this._temporaryResult.value = String.fromCharCode(ch);
-
     this.reader.skip(1);
 
-    return this._temporaryResult;
+    return this.makeResult("separator", String.fromCharCode(ch));
   };
 
 
