@@ -77,6 +77,12 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeArrayLiteralExpression = function (elements) {
+    var result = this.make("ArrayLiteral");
+    result.elements = elements;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeIdentifierExpression = function (identifier) {
     var result = this.make("Identifier");
     result.identifier = identifier;
@@ -112,6 +118,14 @@
     result.memberName = memberName;
     return result;
   };
+
+  JsonTreeBuilder.prototype.makeInvocationExpression = function (callee, argumentValues) {
+    var result = this.make("Invocation");
+    result.callee = callee;
+    result.argumentValues = argumentValues;
+    return result;
+  };
+
 
   JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
     var result = this.make(typeTag);

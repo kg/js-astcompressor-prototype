@@ -165,6 +165,10 @@
       throw new Error("Assertion failed");
   };
 
+  Tokenizer.prototype.getPrevious = function () {
+    return this._previous;
+  }
+
   // Reads a single token from the stream.
   // Return value is reused between calls, so deep-copy it if you wish to retain it
   Tokenizer.prototype.read = function () {

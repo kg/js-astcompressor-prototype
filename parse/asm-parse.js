@@ -80,9 +80,14 @@
     var node = new ChainExpressionNode(expression);
     this.items.splice(first, count, node);
   };
+  
+  ExpressionChain.prototype.log = function () {
+    if (false)
+      console.log("chain", this.items);      
+  }
 
   ExpressionChain.prototype.applyDecrementAndIncrement = function () {
-    console.log("chain", this.items);
+    this.log();
 
     for (var i = 0; i < this.length; i++) {
       switch (this.at(i)) {
@@ -118,7 +123,7 @@
   };
 
   ExpressionChain.prototype.applyUnaryOperators = function () {
-    console.log("chain", this.items);
+    this.log();
 
     for (var i = this.length - 2; i >= 0; i--) {
       switch (this.at(i)) {
@@ -154,7 +159,7 @@
   };
 
   ExpressionChain.prototype.applyBinaryOperators = function () {
-    console.log("chain", this.items);
+    this.log();
 
     for (var p = 0; p < BinaryPrecedences.length; p++) {
       var table = BinaryPrecedences[p];
@@ -185,7 +190,7 @@
   };
 
   ExpressionChain.prototype.applyTernaryOperator = function () {
-    console.log("chain", this.items);
+    this.log();
 
     for (var i = this.length - 2; i >= 0; i--) {
       if (!this.isOperator(i))
@@ -205,7 +210,7 @@
   };
 
   ExpressionChain.prototype.applyAssignmentOperators = function () {
-    console.log("chain", this.items);
+    this.log();
 
     for (var i = 1; i < (this.length - 1); i++) {
       switch (this.at(i)) {
@@ -269,7 +274,7 @@
       console.log("(rewound)");
     } else {
       result = this.tokenizer.read();
-      console.log(result);
+      console.log(result.type, JSON.stringify(result.value));
     }
 
     return result;
@@ -327,11 +332,19 @@
 
     var cond = this.parseExpression("subexpression");
 
-    var trueStatement = this.parseStatement();
+    var trueStatement = this.parseStatement(), falseStatement = null;
 
-    // FIXME: else blocks
+    var maybeElse = this.readToken();
+    if (
+      (maybeElse.type === "keyword") &&
+      (maybeElse.value === "else")
+    ) {
+      falseStatement = this.parseStatement();
+    } else {
+      this.rewind();
+    }
 
-    return this.builder.makeIfStatement(cond, trueStatement, null);    
+    return this.builder.makeIfStatement(cond, trueStatement, falseStatement);
   };
 
   Parser.prototype.parseFunctionExpression = function () {
@@ -402,21 +415,47 @@
     }
   };
 
+  Parser.prototype.parseArrayLiteral = function () {
+    var elements = [];
+
+    var item = null, abort = false;
+    function aborter () { abort = true; }
+
+    while (
+      !abort && 
+      (item = this.parseExpression("array-literal", aborter)) !== false
+    ) {
+      elements.push(item);
+    }
+
+    return this.builder.makeArrayLiteralExpression(elements);
+  };
+
+  Parser.prototype.parseInvocation = function (callee) {
+    var argumentValues = [], argumentValue = null, abort = false;
+    function aborter () { abort = true; }
+
+    while (
+      !abort && 
+      (argumentValue = this.parseExpression("argument-list", aborter)) !== false
+    ) {
+      argumentValues.push(argumentValue);
+    }
+
+    return this.builder.makeInvocationExpression(
+      callee, argumentValues
+    );
+  };
+
   // Parses a single expression. Handles nesting.
-  Parser.prototype.parseExpression = function (context) {
-    var terminator, stopAtComma, stopAtAny = false;
+  Parser.prototype.parseExpression = function (context, terminatorCallback) {
+    var terminator, stopAtComma;
 
     switch (context) {
       // Free-standing expression (no surrounding parentheses).
       case "statement":
         terminator = ";"
         stopAtComma = false;
-        break;
-
-      // Unparenthesized expression. Used for weird constructs like typeof. Gross.
-      case "expression":
-        terminator = null;        
-        stopAtComma = stopAtAny = true;
         break;
 
       // Parenthesized expression.
@@ -469,8 +508,15 @@
 
           // We handle expected terminators here, so if they get encountered below,
           //  they're probably a syntax error.
-          if (terminator === token.value)
+          if (terminator === token.value) {
+            // This notifies the caller that we hit a terminator while parsing.
+            // We don't call this if we hit a comma, since those typically 
+            //  indicate element separators, not scope termination.
+            if (terminatorCallback)
+              terminatorCallback();
+
             break iter;
+          }
 
           switch (token.value) {
             case "(":
@@ -479,29 +525,15 @@
 
               if (lhs) {
                 // Function invocation
-
-                var argumentValues = [], argumentValue = null;
-                while (argumentValue = this.parseExpression("argument-list")) {
-                  argumentValues.push(argumentValue);
-                }
-
-                console.log("arguments", argumentValues);
-
-                lhs = this.builder.makeInvocationExpression(
-                  lhs, argumentValues
-                );
+                lhs = this.parseInvocation(lhs);
               } else {
                 // Subexpression
-
                 lhs = this.parseExpression("subexpression");
               }
 
               break;
 
             case ")":
-              if (stopAtAny)
-                break iter;
-
               return this.abort("Unexpected ) within expression");
 
             case "{":
@@ -529,18 +561,10 @@
               break;
 
             case ";":
-              if (stopAtAny)
-                break iter;
-
               return this.abort("Unexpected ; within expression");
 
             case ":":
               return this.abort("Colon token NYI");
-
-            case "]":
-            case "}":
-              if (stopAtAny)
-                break iter;
 
             default:
               return this.abort("Unexpected ", token);
@@ -550,7 +574,7 @@
 
         case "operator":
           if (token.value === ",") {
-            if (stopAtComma || stopAtAny) {
+            if (stopAtComma) {
               // The comma operator has minimum precedence so in scenarios where
               //  we want to abort at one, it's fine.
               break iter;
@@ -624,8 +648,13 @@
     //  aren't operators (i.e. not strings) so we can wrap them in other expression
     //  types.
 
-    if (!chain.length)
-      return this.abort("No expression parsed");
+    if (!chain.length) {
+      // In some contexts this is meaningful. Arrays, I think?
+      if (context === "array-literal")
+        return false;
+      else
+        return this.abort("No expression parsed");
+    }
 
     // The common case is going to be a chain containing exactly one expression.
     // No work to be done there!
