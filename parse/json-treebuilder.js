@@ -83,6 +83,36 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeUnaryOperatorExpression = function (operator, rhs) {
+    var result = this.make("UnaryOperator");
+    result.operator = operator;
+    result.rhs = rhs;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeBinaryOperatorExpression = function (operator, lhs, rhs) {
+    var result = this.make("BinaryOperator");
+    result.operator = operator;
+    result.lhs = lhs;
+    result.rhs = rhs;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeAssignmentOperatorExpression = function (operator, lhs, rhs) {
+    var result = this.make("AssignmentOperator");
+    result.operator = operator;
+    result.lhs = lhs;
+    result.rhs = rhs;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeMemberAccessExpression = function (lhs, memberName) {
+    var result = this.make("MemberAccess");
+    result.lhs = lhs;
+    result.memberName = memberName;
+    return result;
+  };
+
   JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
     var result = this.make(typeTag);
     result.statements = [];

@@ -17,6 +17,242 @@
   var Tokenizer       = tokenizer.Tokenizer;
   var JsonTreeBuilder = treeBuilder.JSON;
 
+  var BinaryPrecedences = ([
+    ["*", "/", "%"],
+    ["+", "-"],
+    ["<<", ">>", ">>>"],
+    ["<", "<=", ">", ">=", "in", "instanceof"],
+    ["==", "!=", "===", "!=="],
+    ["&"], ["^"], ["|"], ["&&"], ["||"]
+  ]).map(function (p) {
+    var result = Object.create(null);
+    for (var i = 0, l = p.length; i < l; i++)
+      result[p[i]] = true;
+    return result;
+  });
+
+
+  function ChainExpressionNode (e) {
+    this.expression = e;
+  };
+
+  function ChainOperatorNode (o) {
+    this.operator = o;
+  };
+
+
+  function ExpressionChain (treeBuilder) {
+    this.items = [];
+    this.builder = treeBuilder;
+  };
+
+  ExpressionChain.prototype.pushExpression = function (e) {
+    this.items.push(new ChainExpressionNode(e));
+  };
+
+  ExpressionChain.prototype.pushOperator = function (o) {
+    this.items.push(new ChainOperatorNode(o));
+  };
+
+  ExpressionChain.prototype.isExpression = function (i) {
+    var n = this.items[i];
+    return (n instanceof ChainExpressionNode);
+  };
+
+  ExpressionChain.prototype.isOperator = function (i) {
+    var n = this.items[i];
+    return (n instanceof ChainOperatorNode);
+  };
+
+  ExpressionChain.prototype.at = function (i) {
+    var n = this.items[i];
+
+    if (n instanceof ChainExpressionNode)
+      return n.expression;
+    else if (n instanceof ChainOperatorNode)
+      return n.operator;
+    else
+      return null;
+  };
+
+  ExpressionChain.prototype.replaceWithExpression = function (first, last, expression) {
+    var count = (last - first) + 1;
+    var node = new ChainExpressionNode(expression);
+    this.items.splice(first, count, node);
+  };
+
+  ExpressionChain.prototype.applyDecrementAndIncrement = function () {
+    console.log("chain", this.items);
+
+    for (var i = 0; i < this.length; i++) {
+      switch (this.at(i)) {
+        case "++":
+        case "--":
+          var newExpression;
+          var isPrefix = this.isExpression(i + 1);
+          var isPostfix = this.isExpression(i - 1);
+
+          // FIXME: This doesn't detect and reject scenarios where the ++/--
+          //  operators are being used on a non-identifier, but that's probably fine
+
+          if (isPostfix) {
+            newExpression = this.builder.makePostfixMutationExpression(
+              this.at(i),
+              this.at(i - 1)
+            );
+            this.replaceWithExpression(i - 1, i, newExpression)
+            i -= 1;
+          } else if (isPrefix) {
+            newExpression = this.builder.makePrefixMutationExpression(
+              this.at(i),
+              this.at(i + 1)
+            );
+            this.replaceWithExpression(i, i + 1, newExpression)
+          } else {
+            throw new Error("Found a '" + this.at(i) + "' surrounded by operators");
+          }
+
+          break;
+      }
+    }
+  };
+
+  ExpressionChain.prototype.applyUnaryOperators = function () {
+    console.log("chain", this.items);
+
+    for (var i = this.length - 2; i >= 0; i--) {
+      switch (this.at(i)) {
+        case "+":
+        case "-":
+          if (this.isExpression(i - 1) &&
+              this.isExpression(i + 1)) {
+            // This is binary arithmetic, so don't process it here
+            break;
+          } else {
+            // Fall-through
+          }
+
+        case "!":
+        case "~":
+        case "typeof":
+        case "void":
+        case "delete":
+          if (!this.isExpression(i + 1))
+            throw new Error("Found a prefix operator before a non-expression");
+
+          var rhs = this.at(i + 1);
+          var newExpression = this.builder.makeUnaryOperatorExpression(
+            this.at(i),
+            this.at(i + 1)
+          );
+
+          this.replaceWithExpression(i, i + 1, newExpression);
+
+          break;
+      }
+    }
+  };
+
+  ExpressionChain.prototype.applyBinaryOperators = function () {
+    console.log("chain", this.items);
+
+    for (var p = 0; p < BinaryPrecedences.length; p++) {
+      var table = BinaryPrecedences[p];
+
+      for (var i = 1; i < (this.length - 1); i++) {
+        if (!this.isOperator(i))
+          continue;
+
+        if (table[this.at(i)]) {
+          if (
+            !this.isExpression(i - 1) ||
+            !this.isExpression(i + 1)
+          )
+            throw new Error("Found a binary operator without a lhs & rhs");
+
+          var lhs = this.at(i - 1);
+          var rhs = this.at(i + 1);
+          var newExpression = this.builder.makeBinaryOperatorExpression(
+            this.at(i),
+            lhs, rhs
+          );
+
+          this.replaceWithExpression(i - 1, i + 1, newExpression);          
+        }
+      }
+
+    }
+  };
+
+  ExpressionChain.prototype.applyTernaryOperator = function () {
+    console.log("chain", this.items);
+
+    for (var i = this.length - 2; i >= 0; i--) {
+      if (!this.isOperator(i))
+        continue;
+
+      var op = this.at(i);
+
+      // FIXME: I honestly have no idea how to implement this correctly.
+      // Need to read up on the exact parsing rules.
+
+      if (op === "?") {
+        throw new Error("Ternary not implemented");
+      } else if (op === ":") {
+        throw new Error("Ternary not implemented");
+      }
+    }
+  };
+
+  ExpressionChain.prototype.applyAssignmentOperators = function () {
+    console.log("chain", this.items);
+
+    for (var i = 1; i < (this.length - 1); i++) {
+      switch (this.at(i)) {
+        case "=":
+        case "+=":
+        case "-=":
+        case "*=":
+        case "/=":
+        case "%=":
+        case "<<=":
+        case ">>=":
+        case ">>>=":
+        case "&=":
+        case "^=":
+        case "|=":
+          if (
+            !this.isExpression(i - 1) ||
+            !this.isExpression(i + 1)
+          )
+            throw new Error("Found an assignment operator without a lhs & rhs");
+
+          // TODO: Assert that LHS is an identifier?
+
+          var lhs = this.at(i - 1);
+          var rhs = this.at(i + 1);
+          var newExpression = this.builder.makeAssignmentOperatorExpression(
+            this.at(i),
+            lhs, rhs
+          );
+
+          this.replaceWithExpression(i - 1, i + 1, newExpression);          
+          break;
+      }
+    }
+  };
+
+  Object.defineProperty(ExpressionChain.prototype, "length", {
+    enumerable: true,
+    configurable: false,
+    get: function () {
+      return this.items.length;
+    },
+    set: function (l) {
+      this.items.length = l;
+    }
+  });
+
 
   function Parser (tokenizer, treeBuilder) {
     this.tokenizer = tokenizer;
@@ -222,7 +458,7 @@
     //  before being resolved in one final pass at the end. This enables us to
     //  properly handle operator precedence without having to go spelunking inside
     //  nodes constructed by the Builder.
-    var chain = [];
+    var chain = new ExpressionChain(this.builder);
     // Stores the most recently constructed expression. Some tokens wrap this or modify it
     var lhs = null;
 
@@ -318,27 +554,37 @@
               // The comma operator has minimum precedence so in scenarios where
               //  we want to abort at one, it's fine.
               break iter;
+
             } if (lhs) {
               // We could do this manually here, but it's easier to just fold the
               //  comma expression logic in with the rest of the precedence &
               //  associativity logic.
-              chain.push(lhs);
+              chain.pushExpression(lhs);
               lhs = null;
-              chain.push(",");
+              chain.pushOperator(",");
+
             } else {
               return this.abort("Expected expression before ,");
             }
+
+          } else if (token.value === ".") {
+            // Member access operator
+            if (!lhs)
+              this.abort("Expected expression before .");
+
+            var identifier = this.expectToken("identifier");
+            lhs = this.builder.makeMemberAccessExpression(lhs, identifier);
           } else {
             // Operators push expressions and themselves onto the chain
             //  so that at the end of things we can order them by precedence
             //  and apply associativity.
 
             if (lhs) {
-              chain.push(lhs);
+              chain.pushExpression(lhs);
               lhs = null;
             }
 
-            chain.push(token.value);
+            chain.pushOperator(token.value);
           }
 
           break;
@@ -368,7 +614,7 @@
 
     // Now we finalize the chain, and apply precedence sorting
     if (lhs) {
-      chain.push(lhs);
+      chain.pushExpression(lhs);
       lhs = null;
     }
 
@@ -383,12 +629,23 @@
 
     // The common case is going to be a chain containing exactly one expression.
     // No work to be done there!
+    if (chain.length > 1) {
+      // The right solution here is probably a modified version of the shunting-yard
+      //  algorithm, but it would need a handful of modifications to handle JS's oddball
+      //  operators, so I'm going with slow-but-correct here.
+      chain.applyDecrementAndIncrement();
+      chain.applyUnaryOperators();
+      chain.applyBinaryOperators();
+      chain.applyTernaryOperator();
+      chain.applyAssignmentOperators();
+    }
+
     if (chain.length === 1)
-      return chain[0];
-
-    console.log("chain", chain);
-
-    return this.abort("NYI");
+      return chain.at(0);
+    else {
+      console.log("chain", chain.items);
+      return this.abort("Left with more than one result after expression resolution");
+    }
   };
 
   // parses a single statement, returns false if it hit a block-closing token.
