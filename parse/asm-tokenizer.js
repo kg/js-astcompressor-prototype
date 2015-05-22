@@ -17,7 +17,7 @@
     "class extends return while " +
     "const finally super with " +
     "continue for switch yield " +
-    "debugger function this " +
+    "debugger function " /* this " */ +
     "default if throw " +
     "delete import try " +
     "enum await " +
@@ -152,6 +152,10 @@
     this.reader = input;
     this._previous = null;
   };
+
+  Tokenizer.prototype.getPosition = function () {
+    return this.reader.getPosition();
+  }
 
   Tokenizer.prototype.makeResult = function (type, value) {
     var result = new Token(type, value);

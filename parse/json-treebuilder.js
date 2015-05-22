@@ -83,6 +83,12 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeObjectLiteralExpression = function (pairs) {
+    var result = this.make("ObjectLiteral");
+    result.pairs = pairs;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeIdentifierExpression = function (identifier) {
     var result = this.make("Identifier");
     result.identifier = identifier;

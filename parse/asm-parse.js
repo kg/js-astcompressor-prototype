@@ -17,6 +17,11 @@
   var Tokenizer       = tokenizer.Tokenizer;
   var JsonTreeBuilder = treeBuilder.JSON;
 
+
+  var TraceTokenization       = true;
+  var TraceParsingStack       = false;
+  var TraceOperatorPrecedence = false;
+
   var BinaryPrecedences = ([
     ["*", "/", "%"],
     ["+", "-"],
@@ -82,7 +87,7 @@
   };
   
   ExpressionChain.prototype.log = function () {
-    if (false)
+    if (TraceOperatorPrecedence)
       console.log("chain", this.items);      
   }
 
@@ -263,18 +268,86 @@
     this.tokenizer = tokenizer;
     this.builder = treeBuilder;
     this._rewound = null;
+
+    this.previousStackFrames = [];
+  };
+
+  Parser.prototype.getIndentChars = function (n) {
+    var indentChars = "";
+
+    for (var i = 0; i < n - 1; i++)
+      indentChars += "..";
+
+    if (n)
+      indentChars += "  ";
+
+    return indentChars;
   };
 
   Parser.prototype.readToken = function () {
     var result;
 
+    var indentLevel = 0;
+    if (TraceParsingStack) {
+      var r = /at ([A-Za-z0-9$_\.]*) /g;
+      Error.stackTraceLimit = 128;
+      var e = new Error();
+      var stack = e.stack;
+      var stackFrames = [], frame = null;
+
+      while ((frame = r.exec(stack)) !== null) {
+        frame = frame[1];
+        if (frame.indexOf("Parser.") !== 0)
+          continue;
+        else if (frame.indexOf(".readToken") >= 0)
+          continue;
+        else if (frame.indexOf(".expectToken") >= 0)
+          continue;
+
+        stackFrames.push(frame);
+      }
+
+      stackFrames.reverse();
+
+      var newSubframes = false;
+
+      for (var i = 0, l = Math.max(stackFrames.length, this.previousStackFrames.length); i < l; i++) {
+        var previousFrame = this.previousStackFrames[i];
+        frame = stackFrames[i];
+
+        if (previousFrame === frame)
+          continue;
+
+        if (!previousFrame)
+          console.log(this.getIndentChars(i) + frame + " {");
+        else if (previousFrame && !frame) {
+          console.log(this.getIndentChars(i) + "} // " + previousFrame);
+          break;
+        } else {
+          var ic = this.getIndentChars(i);
+          if (!newSubframes)
+            console.log(ic + "} // " + previousFrame);
+
+          console.log(ic + frame + " {");
+          newSubframes = true;
+        }
+      }
+
+      this.previousStackFrames = stackFrames;
+      indentLevel = stackFrames.length;
+    }
+
     if (this._rewound) {
       result = this._rewound;
       this._rewound = null;
-      console.log("(rewound)");
+
+      if (TraceTokenization)
+        console.log(this.getIndentChars(indentLevel) + "(rewound)");
     } else {
       result = this.tokenizer.read();
-      console.log(result.type, JSON.stringify(result.value));
+
+      if (TraceTokenization)
+        console.log(this.getIndentChars(indentLevel) + result.type, JSON.stringify(result.value));
     }
 
     return result;
@@ -322,7 +395,7 @@
       if (stmt === false)
         break;
 
-      console.log("Statement", stmt);
+      // console.log("Statement", stmt);
       this.builder.appendToBlock(block, stmt);
     }
   };
@@ -431,6 +504,33 @@
     return this.builder.makeArrayLiteralExpression(elements);
   };
 
+  Parser.prototype.parseObjectLiteral = function () {
+    var pairs = [];
+
+    var key = null, value = null, abort = false;
+    function aborter () { abort = true; }
+
+    while (
+      !abort && 
+      (
+        key &&
+        (value = this.parseExpression("object-literal", aborter)) !== false
+      ) ||
+      (
+        (key = this.parseExpression("object-literal", aborter)) !== false
+      )
+    ) {
+      if (key && value) {
+        pairs.push([key, value]);
+        key = value = null;
+      } else {
+        this.expectToken("separator", ":");
+      }
+    }
+
+    return this.builder.makeObjectLiteralExpression(pairs);
+  };
+
   Parser.prototype.parseInvocation = function (callee) {
     var argumentValues = [], argumentValue = null, abort = false;
     function aborter () { abort = true; }
@@ -449,47 +549,41 @@
 
   // Parses a single expression. Handles nesting.
   Parser.prototype.parseExpression = function (context, terminatorCallback) {
-    var terminator, stopAtComma;
+    var terminators;
 
     switch (context) {
       // Free-standing expression (no surrounding parentheses).
       case "statement":
-        terminator = ";"
-        stopAtComma = false;
+        terminators = ";}"
         break;
 
       // Parenthesized expression.
       case "subexpression":
-        terminator = ")"
-        stopAtComma = false;
+        terminators = ")"
         break;
 
       // Array subscript index.
       case "subscript":
-        terminator = "]"
-        stopAtComma = false;
+        terminators = "]"
         break;
 
       // Single argument within argument list.
       case "argument-list":
-        terminator = ")";
-        stopAtComma = true;
+        terminators = "),";
         break;
 
       // Single value within array literal.
       case "array-literal":
-        terminator = "]";
-        stopAtComma = true;
+        terminators = "],";
         break;
 
       // Single key/value pair within object literal.
       case "object-literal":
-        terminator = "}";
-        stopAtComma = true;
+        terminators = "},:";
         break;
 
       default:
-        this.abort("Unsupported expression context '" + context + "'");
+        return this.abort("Unsupported expression context '" + context + "'");
     }
 
     var token = null;
@@ -505,15 +599,14 @@
     while (token = this.readToken()) {
       switch (token.type) {
         case "separator":
-
           // We handle expected terminators here, so if they get encountered below,
           //  they're probably a syntax error.
-          if (terminator === token.value) {
+          if (terminators.indexOf(token.value) >= 0) {
             // This notifies the caller that we hit a terminator while parsing.
-            // We don't call this if we hit a comma, since those typically 
-            //  indicate element separators, not scope termination.
+            // The argument lets them decide how to handle the terminator.
+            // The callback is not invoked for commas, even though they can terminate.
             if (terminatorCallback)
-              terminatorCallback();
+              terminatorCallback(token.value);
 
             break iter;
           }
@@ -532,9 +625,6 @@
               }
 
               break;
-
-            case ")":
-              return this.abort("Unexpected ) within expression");
 
             case "{":
               if (lhs) {
@@ -560,23 +650,19 @@
 
               break;
 
-            case ";":
-              return this.abort("Unexpected ; within expression");
-
-            case ":":
-              return this.abort("Colon token NYI");
-
             default:
-              return this.abort("Unexpected ", token);
+              return this.abort("Unexpected '" + token.value + "' within expression");
           }
 
           break;
 
         case "operator":
           if (token.value === ",") {
-            if (stopAtComma) {
+            if (terminators.indexOf(",") >= 0) {
               // The comma operator has minimum precedence so in scenarios where
               //  we want to abort at one, it's fine.
+              // We don't invoke the termination callback since commas never require
+              //  a special outer response
               break iter;
 
             } if (lhs) {
@@ -591,6 +677,19 @@
               return this.abort("Expected expression before ,");
             }
 
+          } else if (token.value === ":") {
+            if (terminators.indexOf(":") >= 0) {
+              // Like with the comma, we break but don't invoke the termination callback
+              break iter;
+            } else {
+              if (lhs) {
+                chain.pushExpression(lhs);
+                lhs = null;
+              }
+
+              chain.pushOperator(token.value);
+            }
+
           } else if (token.value === ".") {
             // Member access operator
             if (!lhs)
@@ -598,6 +697,7 @@
 
             var identifier = this.expectToken("identifier");
             lhs = this.builder.makeMemberAccessExpression(lhs, identifier);
+
           } else {
             // Operators push expressions and themselves onto the chain
             //  so that at the end of things we can order them by precedence
@@ -649,8 +749,11 @@
     //  types.
 
     if (!chain.length) {
-      // In some contexts this is meaningful. Arrays, I think?
-      if (context === "array-literal")
+      // In some contexts this is meaningful - array and object literals.
+      if (
+        (context === "array-literal") ||
+        (context === "object-literal")
+      )
         return false;
       else
         return this.abort("No expression parsed");
@@ -748,7 +851,13 @@
     var tokenizer = new Tokenizer(input);
     var parser    = new Parser(tokenizer, treeBuilder);
 
-    return parser.parseTopLevel();
+    try {
+      return parser.parseTopLevel();
+    } catch (exc) {
+      console.log("Error occurred at offset " + tokenizer.getPosition());
+      console.log("Most recent token was", tokenizer.getPrevious());
+      throw exc;
+    }
   };
 
 
