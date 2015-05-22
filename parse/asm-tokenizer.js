@@ -11,6 +11,28 @@
     factory((root.asmTokenizer = {}));
   }
 }(this, function (exports) {
+  var Keywords = "break do in typeof " +
+    "case else instanceof var " +
+    "catch export new void " +
+    "class extends return while " +
+    "const finally super with " +
+    "continue for switch yield " +
+    "debugger function this " +
+    "default if throw " +
+    "delete import try " +
+    "enum await " +
+    "implements package protected " +
+    "interface private public";
+
+  var KeywordLookup = Object.create(null);
+  Keywords.split(" ").forEach(function (kw) { KeywordLookup[kw] = true; });
+
+  var KeywordOperators = {
+    "delete": true,
+    "void": true,
+    "typeof": true
+  };
+
   var _0 = "0".charCodeAt(0), _9 = "9".charCodeAt(0);
   var _a = "a".charCodeAt(0), _z = "z".charCodeAt(0);
   var _A = "A".charCodeAt(0), _Z = "Z".charCodeAt(0);
@@ -118,15 +140,18 @@
   };
 
 
+  function Token (type, value) {
+    this.type = type;
+    this.value = value;
+  };
+
+
   // parses an input character stream into a stream of tokens
   // input is a ByteReader (see encoding.js)
   function Tokenizer (input) {
     this.reader = input;
 
-    this._temporaryResult = {
-      type: "",
-      value: null
-    };
+    this._temporaryResult = new Token("", null);
   };
 
   Tokenizer.prototype.assert = function (cond) {
@@ -134,6 +159,8 @@
       throw new Error("Assertion failed");
   };
 
+  // Reads a single token from the stream.
+  // Return value is reused between calls, so deep-copy it if you wish to retain it
   Tokenizer.prototype.read = function () {
     skipDeadSpace(this.reader);
 
@@ -290,8 +317,6 @@
   };
 
   Tokenizer.prototype.readIdentifier = function (ch) {
-    this._temporaryResult.type = "identifier";
-
     var temp = String.fromCharCode(ch);
     this.reader.skip(1);
 
@@ -301,6 +326,13 @@
     }
 
     this._temporaryResult.value = temp;
+
+    this._temporaryResult.type = 
+      (KeywordOperators[temp] === true)
+        ? "operator"
+        : (KeywordLookup[temp] === true)
+            ? "keyword"
+            : "identifier";
 
     return this._temporaryResult;
   };

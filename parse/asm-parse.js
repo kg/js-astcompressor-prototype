@@ -17,6 +17,7 @@
   var Tokenizer       = tokenizer.Tokenizer;
   var JsonTreeBuilder = treeBuilder.JSON;
 
+
   function Parser (tokenizer, treeBuilder) {
     this.tokenizer = tokenizer;
     this.builder = treeBuilder;
@@ -85,30 +86,14 @@
     }
   };
 
-  // Parses an identifier into an expression or statement. Most identifiers are a single token,
-  //  but we special-case ones like 'function' by parsing the stuff that follows.
-  Parser.prototype.parseIdentifier = function (initialToken) {
-    if (initialToken.type !== "identifier")
-      return this.abort("Expected an identifier");
-
-    switch (initialToken.value) {
-      case "function":
-        return this.parseFunctionExpression();
-
-      case "if":
-        return this.parseIfStatement();
-
-      default:
-        return this.builder.makeIdentifierExpression(initialToken.value);
-    }
-  };
-
   Parser.prototype.parseIfStatement = function () {
     this.expectToken("separator", "(");
 
-    var cond = this.parseExpression();
+    var cond = this.parseExpression("subexpression");
 
     var trueStatement = this.parseStatement();
+
+    // FIXME: else blocks
 
     return this.builder.makeIfStatement(cond, trueStatement, null);    
   };
@@ -166,51 +151,159 @@
     );
   };
 
-  // Parses a single expression. If it encounters a ( it handles nesting.
-  Parser.prototype.parseExpression = function (isNested) {
-    var token = null, lhs = null;
+  // Parses complex keywords.
+  // Returns false if the keyword was not handled by the parser.
+  Parser.prototype.parseKeyword = function (keyword) {
+    switch (keyword) {
+      case "function":
+        return this.parseFunctionExpression();
+
+      case "if":
+        return this.parseIfStatement();
+
+      default:
+        return false;
+    }
+  };
+
+  // Parses a single expression. Handles nesting.
+  Parser.prototype.parseExpression = function (context) {
+    var terminator, stopAtComma, stopAtAny = false;
+
+    switch (context) {
+      // Free-standing expression (no surrounding parentheses).
+      case "statement":
+        terminator = ";"
+        stopAtComma = false;
+        break;
+
+      // Unparenthesized expression. Used for weird constructs like typeof. Gross.
+      case "expression":
+        terminator = null;        
+        stopAtComma = stopAtAny = true;
+        break;
+
+      // Parenthesized expression.
+      case "subexpression":
+        terminator = ")"
+        stopAtComma = false;
+        break;
+
+      // Array subscript index.
+      case "subscript":
+        terminator = "]"
+        stopAtComma = false;
+        break;
+
+      // Single argument within argument list.
+      case "argument-list":
+        terminator = ")";
+        stopAtComma = true;
+        break;
+
+      // Single value within array literal.
+      case "array-literal":
+        terminator = "]";
+        stopAtComma = true;
+        break;
+
+      // Single key/value pair within object literal.
+      case "object-literal":
+        terminator = "}";
+        stopAtComma = true;
+        break;
+
+      default:
+        this.abort("Unsupported expression context '" + context + "'");
+    }
+
+    var token = null;
+    // HACK: Any non-nested expression elements are splatted onto the end of chain
+    //  before being resolved in one final pass at the end. This enables us to
+    //  properly handle operator precedence without having to go spelunking inside
+    //  nodes constructed by the Builder.
+    var chain = [];
+    // Stores the most recently constructed expression. Some tokens wrap this or modify it
+    var lhs = null;
 
     iter:
     while (token = this.readToken()) {
       switch (token.type) {
         case "separator":
 
+          // We handle expected terminators here, so if they get encountered below,
+          //  they're probably a syntax error.
+          if (terminator === token.value)
+            break iter;
+
           switch (token.value) {
             case "(":
               // Subexpression or function invocation
+              // These are high-precedence and complicated so we just handle them now
 
               if (lhs) {
                 // Function invocation
+
+                var argumentValues = [], argumentValue = null;
+                while (argumentValue = this.parseExpression("argument-list")) {
+                  argumentValues.push(argumentValue);
+                }
+
+                console.log("arguments", argumentValues);
+
                 lhs = this.builder.makeInvocationExpression(
-                  lhs, this.parseArgumentList()
+                  lhs, argumentValues
                 );
               } else {
                 // Subexpression
-                lhs = this.parseExpression(true);
+
+                lhs = this.parseExpression("subexpression");
               }
 
               break;
 
             case ")":
-              // Subexpression terminator
-              if (isNested)
+              if (stopAtAny)
                 break iter;
-              else
-                return this.abort("Unexpected ) within free-standing expression");
+
+              return this.abort("Unexpected ) within expression");
 
             case "{":
-              // Object literal
-              return this.abort("object literal");
+              if (lhs) {
+                return this.abort("Unexpected { juxtaposed with expression");
+              } else {
+                lhs = this.parseObjectLiteral();
+              }
+
+              break;
 
             case "[":
-              // Array literal
-              return this.abort("array literal");
+              // Subscript expression or array literal
+
+              if (lhs) {
+                // Subscripting
+                // High-precedence so we can do it here
+                var index = this.parseExpression("subscript");
+                lhs = this.builder.makeSubscriptExpression(lhs, index);
+              } else {
+                // Array literal
+                lhs = this.parseArrayLiteral();
+              }
+
+              break;
 
             case ";":
-              // End of enclosing statement.
-              if (isNested)
-                return this.abort("Unexpected ; within parenthesized expression");
-              else
+              if (stopAtAny)
+                break iter;
+
+              return this.abort("Unexpected ; within expression");
+
+            case ":":
+              return this.abort("Colon token NYI");
+
+            case "]":
+            case "}":
+              if (stopAtAny)
                 break iter;
 
             default:
@@ -219,8 +312,50 @@
 
           break;
 
+        case "operator":
+          if (token.value === ",") {
+            if (stopAtComma || stopAtAny) {
+              // The comma operator has minimum precedence so in scenarios where
+              //  we want to abort at one, it's fine.
+              break iter;
+            } if (lhs) {
+              // We could do this manually here, but it's easier to just fold the
+              //  comma expression logic in with the rest of the precedence &
+              //  associativity logic.
+              chain.push(lhs);
+              lhs = null;
+              chain.push(",");
+            } else {
+              return this.abort("Expected expression before ,");
+            }
+          } else {
+            // Operators push expressions and themselves onto the chain
+            //  so that at the end of things we can order them by precedence
+            //  and apply associativity.
+
+            if (lhs) {
+              chain.push(lhs);
+              lhs = null;
+            }
+
+            chain.push(token.value);
+          }
+
+          break;
+
         case "identifier":
-          lhs = this.parseIdentifier(token);
+          lhs = this.builder.makeIdentifierExpression(token.value);
+          break;
+
+        case "keyword":
+          // Attempt to parse complex keywords
+          var kw = this.parseKeyword(token.value);
+          if (kw === false) {
+            return this.abort("Unhandled keyword '" + token.value + "' in expression");
+          } else {
+            lhs = kw;
+          }
+
           break;
 
         case "integer":
@@ -231,10 +366,29 @@
       }
     }
 
-    if (!lhs)
+    // Now we finalize the chain, and apply precedence sorting
+    if (lhs) {
+      chain.push(lhs);
+      lhs = null;
+    }
+
+    // At this point the chain will be a stream of operators and expressions.
+    // Operators are raw string literals, expressions are objects (from the builder).
+    // We don't need to know anything about the expressions, just know that they 
+    //  aren't operators (i.e. not strings) so we can wrap them in other expression
+    //  types.
+
+    if (!chain.length)
       return this.abort("No expression parsed");
 
-    return lhs;
+    // The common case is going to be a chain containing exactly one expression.
+    // No work to be done there!
+    if (chain.length === 1)
+      return chain[0];
+
+    console.log("chain", chain);
+
+    return this.abort("NYI");
   };
 
   // parses a single statement, returns false if it hit a block-closing token.
@@ -246,11 +400,12 @@
     while (token = this.readToken()) {
       switch (token.type) {
         case "separator":
-          // Read nested block scope. Meaningless, but important to parse
-          //  correctly.
-
           switch (token.value) {
             case "{":
+              // Read nested block scope. Meaningless, but important to parse
+              //  correctly.
+              // FIXME: How do we distinguish between a free-standing object literal,
+              //  and a block scope?
               var childBlock = this.builder.makeBlock();
               stmt = this.builder.makeBlockStatement(childBlock);
 
@@ -268,7 +423,7 @@
               continue iter;
 
             case "(":              
-              expr = this.parseExpression(true);
+              expr = this.parseExpression("subexpression");
               break iter;
 
             default:
@@ -277,7 +432,7 @@
 
         default:
           this.rewind(token);
-          expr = this.parseExpression(false);
+          expr = this.parseExpression("statement");
           break iter;
 
       }

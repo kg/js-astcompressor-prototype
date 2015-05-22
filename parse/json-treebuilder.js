@@ -21,7 +21,11 @@
       proto.type = type;
     }
 
-    return Object.create(proto);
+    var result = Object.create(proto);
+    // HACK For debugging
+    result.type = type;
+    
+    return result;
   };
 
   JsonTreeBuilder.prototype.makeTopLevelBlock = function () {
