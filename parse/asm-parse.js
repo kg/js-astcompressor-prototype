@@ -30,7 +30,8 @@
     this.builder = treeBuilder;
     this._rewound = null;
 
-    this.previousStackFrames = [];
+    if (TraceParsingStack)
+      this.previousStackFrames = [];
   };
 
   Parser.prototype.getIndentChars = function (n) {
@@ -115,6 +116,9 @@
   };
 
   Parser.prototype.rewind = function (token) {
+    if (arguments.length !== 1)
+      throw new Error("Expected token");
+
     if (this._rewound)
       throw new Error("Already rewound");
     else
@@ -175,10 +179,45 @@
     ) {
       falseStatement = this.parseStatement();
     } else {
-      this.rewind();
+      this.rewind(maybeElse);
     }
 
     return this.builder.makeIfStatement(cond, trueStatement, falseStatement);
+  };
+
+  Parser.prototype.parseDeclarationStatement = function () {
+    var declarations = [], token = null;
+
+    var abort = false;
+    function aborter () { abort = true; }
+
+    while ((token = this.readToken()) !== false) {
+      if (token.type === "identifier") {
+        var variableName = token.value;
+        token = this.readToken();
+
+        if (token.type === "operator") {
+          if (token.value === "=") {
+            // Initializer
+            var initializer = this.parseExpression("declaration", aborter);
+            declarations.push([variableName, initializer]);
+          } else if (token.value === ",") {
+            // No initializer
+            declarations.push([variableName]);
+          }
+        } else {
+          // FIXME: Error handling?
+          this.rewind(token);
+          break;
+        }
+      } else {
+        // FIXME: Error handling?
+        this.rewind(token);
+        break;
+      }
+    }
+
+    return this.builder.makeDeclarationStatement(declarations);
   };
 
   Parser.prototype.parseFunctionExpression = function () {
@@ -197,8 +236,6 @@
     }
 
     var argumentNames = [];
-
-    token = this.readToken();
 
     while (
       (token = this.readToken()) && 
@@ -243,6 +280,10 @@
 
       case "if":
         return this.parseIfStatement();
+
+      case "var":
+      case "const":
+        return this.parseDeclarationStatement();
 
       default:
         return false;
@@ -321,6 +362,11 @@
       // Parenthesized expression.
       case "subexpression":
         terminators = ")"
+        break;
+
+      // Single declarator in a var/const statement.
+      case "declaration":
+        terminators = ";},";
         break;
 
       // Array subscript index.

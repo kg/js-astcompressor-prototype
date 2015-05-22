@@ -62,6 +62,12 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeDeclarationStatement = function (declarations) {
+    var result = this.make("DeclarationStatement");
+    result.declarations = declarations;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     var result = this.make("Function");
     result.name = name;
