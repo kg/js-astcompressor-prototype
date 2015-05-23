@@ -126,11 +126,13 @@
 
           while (
             !reader.eof && 
-            (ch  !== Asterisk) && 
-            (ch2 !== ForwardSlash)
+            (
+              (ch  !== Asterisk) ||
+              (ch2 !== ForwardSlash)
+            )
           ) {
             ch = reader.read();
-            ch2 = reader.peek(1);
+            ch2 = reader.peek(0);
           };
 
           reader.read();
@@ -438,7 +440,14 @@
         break;
     }
 
-    return this.makeResult("regexp", new RegExp(body, flags));
+    try {
+      var result = this.makeResult("regexp", new RegExp(body, flags));
+    } catch (exc) {
+      console.log("Expression body was " + JSON.stringify(body) + ", flags were " + JSON.stringify(flags));
+      throw exc;
+    }
+
+    return result;
   };
 
   Tokenizer.prototype.readSeparator = function (ch) {
