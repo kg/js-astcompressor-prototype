@@ -135,6 +135,7 @@
         case "typeof":
         case "void":
         case "delete":
+        case "new":
           if (!this.isExpression(i + 1))
             throw new Error("Found a prefix operator before a non-expression");
 
@@ -175,7 +176,8 @@
             lhs, rhs
           );
 
-          this.replaceWithExpression(i - 1, i + 1, newExpression);          
+          this.replaceWithExpression(i - 1, i + 1, newExpression);
+          i -= 1;       
         }
       }
 
@@ -234,7 +236,8 @@
             lhs, rhs
           );
 
-          this.replaceWithExpression(i - 1, i + 1, newExpression);          
+          this.replaceWithExpression(i - 1, i + 1, newExpression);
+          i -= 1;
           break;
       }
     }

@@ -21,7 +21,7 @@
 
 
   var TraceTokenization       = true;
-  var TraceParsingStack       = false;
+  var TraceParsingStack       = true;
   var TraceOperatorPrecedence = false;
 
 
@@ -119,7 +119,7 @@
     if (arguments.length !== 1)
       throw new Error("Expected token");
 
-    if (this._rewound)
+    if (this._rewound && (this._rewound !== token))
       throw new Error("Already rewound");
     else
       this._rewound = token;
@@ -154,6 +154,9 @@
   // parses the interior of a multi-statement block (i.e. the { has been consumed)
   // aborts at eof or uneven } (end of multi-statement block)
   Parser.prototype.parseBlockInterior = function (block) {
+    if (!block || !block.statements)
+      return this.abort("Expected a block argument");
+
     while (true) {
       var stmt = this.parseStatement(block);
 
@@ -163,6 +166,23 @@
       // console.log("Statement", stmt);
       this.builder.appendToBlock(block, stmt);
     }
+  };
+
+  Parser.prototype.parseReturnStatement = function () {
+    var result = this.parseExpression("statement-argument");
+
+    if (result === false)
+      result = null;
+
+    return this.builder.makeReturnStatement(result);
+  };
+
+  Parser.prototype.parseThrowStatement = function () {
+    var expression = this.parseExpression("statement-argument");
+    if (!expression)
+      return this.abort("Expected argument after 'throw'");
+
+    return this.builder.makeThrowStatement(expression);
   };
 
   Parser.prototype.parseIfStatement = function () {
@@ -264,7 +284,7 @@
     this.expectToken("separator", "{");
 
     var body = this.builder.makeBlock();
-    this.parseBlockInterior();
+    this.parseBlockInterior(body);
 
     return this.builder.makeFunctionExpression(
       name, argumentNames, body
@@ -284,6 +304,12 @@
       case "var":
       case "const":
         return this.parseDeclarationStatement();
+
+      case "return":
+        return this.parseReturnStatement();
+
+      case "throw":
+        return this.parseThrowStatement();
 
       default:
         return false;
@@ -350,13 +376,20 @@
   };
 
   // Parses a single expression. Handles nesting.
+  // terminatorCallback, if provided, can return true to 'rewind' the terminating token
   Parser.prototype.parseExpression = function (context, terminatorCallback) {
-    var terminators;
+    var terminators, stopAtKeywords = false, rewindChars = "";
 
     switch (context) {
+      // Return statement.
+      case "statement-argument":
+        stopAtKeywords = true;
+        // Fall-through
+
       // Free-standing expression (no surrounding parentheses).
       case "statement":
         terminators = ";}"
+        rewindChars = "}";
         break;
 
       // Parenthesized expression.
@@ -367,6 +400,7 @@
       // Single declarator in a var/const statement.
       case "declaration":
         terminators = ";},";
+        rewindChars = "}";
         break;
 
       // Array subscript index.
@@ -412,8 +446,14 @@
             // This notifies the caller that we hit a terminator while parsing.
             // The argument lets them decide how to handle the terminator.
             // The callback is not invoked for commas, even though they can terminate.
-            if (terminatorCallback)
-              terminatorCallback(token.value);
+            if (terminatorCallback) {
+              if (terminatorCallback(token.value) === true)
+                this.rewind(token);
+            }
+
+            // Certain terminators need to be rewinded so that they can be processed again.
+            if (rewindChars.indexOf(token.value) >= 0)                
+              this.rewind(token);
 
             break iter;
           }
@@ -449,7 +489,7 @@
                 // Subscripting
                 // High-precedence so we can do it here
                 var index = this.parseExpression("subscript");
-                lhs = this.builder.makeSubscriptExpression(lhs, index);
+                lhs = this.builder.makeComputedMemberAccessExpression(lhs, index);
               } else {
                 // Array literal
                 lhs = this.parseArrayLiteral();
@@ -525,6 +565,15 @@
           break;
 
         case "keyword":
+          if (stopAtKeywords) {
+            if (terminatorCallback) {
+              if (terminatorCallback(token.value) === true)
+                this.rewind(token);
+            }
+
+            break iter;
+          }
+
           // Attempt to parse complex keywords
           var kw = this.parseKeyword(token.value);
           if (kw === false) {
@@ -556,10 +605,11 @@
     //  types.
 
     if (!chain.length) {
-      // In some contexts this is meaningful - array and object literals.
+      // In some contexts the expression being parsed is optional, so we don't fail.
       if (
         (context === "array-literal") ||
-        (context === "object-literal")
+        (context === "object-literal") ||
+        (context === "statement-argument")
       )
         return false;
       else

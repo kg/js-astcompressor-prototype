@@ -68,6 +68,18 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeReturnStatement = function (expression) {
+    var result = this.make("ReturnStatement");
+    result.expression = expression;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeThrowStatement = function (expression) {
+    var result = this.make("ThrowStatement");
+    result.expression = expression;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     var result = this.make("Function");
     result.name = name;
@@ -101,6 +113,20 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makePrefixMutationExpression = function (operator, rhs) {
+    var result = this.make("PrefixMutation");
+    result.operator = operator;
+    result.rhs = rhs;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makePostfixMutationExpression = function (operator, lhs) {
+    var result = this.make("PostfixMutation");
+    result.operator = operator;
+    result.lhs = lhs;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeUnaryOperatorExpression = function (operator, rhs) {
     var result = this.make("UnaryOperator");
     result.operator = operator;
@@ -119,6 +145,13 @@
   JsonTreeBuilder.prototype.makeAssignmentOperatorExpression = function (operator, lhs, rhs) {
     var result = this.make("AssignmentOperator");
     result.operator = operator;
+    result.lhs = lhs;
+    result.rhs = rhs;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeComputedMemberAccessExpression = function (lhs, rhs) {
+    var result = this.make("ComputedMemberAccess");
     result.lhs = lhs;
     result.rhs = rhs;
     return result;

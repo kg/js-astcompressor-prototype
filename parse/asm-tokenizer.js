@@ -30,7 +30,10 @@
   var KeywordOperators = {
     "delete": true,
     "void": true,
-    "typeof": true
+    "typeof": true,
+    "new": true,
+    "in": true,
+    "instanceof": true
   };
 
   var _0 = "0".charCodeAt(0), _9 = "9".charCodeAt(0);
