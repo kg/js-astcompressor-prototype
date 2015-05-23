@@ -157,6 +157,14 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeTernaryOperatorExpression = function (condition, trueExpression, falseExpression) {
+    var result = this.make("TernaryOperator");
+    result.condition = condition;
+    result.trueExpression = trueExpression;
+    result.falseExpression = falseExpression;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeMemberAccessExpression = function (lhs, memberName) {
     var result = this.make("MemberAccess");
     result.lhs = lhs;

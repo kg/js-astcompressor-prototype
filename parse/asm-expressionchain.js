@@ -193,13 +193,25 @@
 
       var op = this.at(i);
 
-      // FIXME: I honestly have no idea how to implement this correctly.
-      // Need to read up on the exact parsing rules.
+      if (op === ":") {
+        var falseValue = this.at(i + 1);
+        var trueValue = this.at(i - 1);
+        var condMarker = this.at(i - 2);
 
-      if (op === "?") {
-        throw new Error("Ternary not implemented");
-      } else if (op === ":") {
-        throw new Error("Ternary not implemented");
+        if (condMarker !== "?") {
+          console.log(i, this.items);
+          throw new Error("Expected ? in ternary expression but found " + condMarker);
+        }
+
+        var condition = this.at(i - 3);
+
+        var newExpression = this.builder.makeTernaryOperatorExpression(
+          condition, trueValue, falseValue
+        );
+        this.replaceWithExpression(i - 3, i + 1, newExpression);
+
+        // FIXME: Not sure about this
+        i -= 2;
       }
     }
   };

@@ -20,8 +20,8 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = true;
-  var TraceParsingStack       = true;
+  var TraceTokenization       = false;
+  var TraceParsingStack       = false;
   var TraceOperatorPrecedence = false;
 
 
@@ -348,6 +348,8 @@
       else if (token.type !== "identifier")
         return this.abort("Expected identifier or }");
 
+      var colon = this.expectToken("operator", ":");
+
       var key = token.value;
       var value = this.parseExpression("object-literal", aborter);
 
@@ -544,6 +546,11 @@
             // Operators push expressions and themselves onto the chain
             //  so that at the end of things we can order them by precedence
             //  and apply associativity.
+
+            if (token.value === ":") {
+              if (!chain.length)
+                return this.abort("Unexpected : early in expression");
+            }
 
             if (lhs) {
               chain.pushExpression(lhs);
