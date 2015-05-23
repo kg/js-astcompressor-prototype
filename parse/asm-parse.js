@@ -335,25 +335,25 @@
   Parser.prototype.parseObjectLiteral = function () {
     var pairs = [];
 
-    var key = null, value = null, abort = false;
+    var abort = false;
     function aborter () { abort = true; }
 
-    while (
-      !abort && 
-      (
-        key &&
-        (value = this.parseExpression("object-literal", aborter)) !== false
-      ) ||
-      (
-        (key = this.parseExpression("object-literal", aborter)) !== false
+    while (true) {
+      var token = this.readToken();
+      if (
+        (token.type === "separator") &&
+        (token.value === "}")
       )
-    ) {
-      if (key && value) {
-        pairs.push([key, value]);
-        key = value = null;
-      } else {
-        this.expectToken("operator", ":");
-      }
+        break;
+      else if (token.type !== "identifier")
+        return this.abort("Expected identifier or }");
+
+      var key = token.value;
+      var value = this.parseExpression("object-literal", aborter);
+
+      pairs.push([key, value]);
+      if (abort)
+        break;
     }
 
     return this.builder.makeObjectLiteralExpression(pairs);
@@ -428,8 +428,7 @@
 
       // Single key/value pair within object literal.
       case "object-literal":
-        terminators = "},:";
-        rewindChars = ":";
+        terminators = "},";
         break;
 
       default:
