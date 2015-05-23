@@ -352,7 +352,7 @@
         pairs.push([key, value]);
         key = value = null;
       } else {
-        this.expectToken("separator", ":");
+        this.expectToken("operator", ":");
       }
     }
 
@@ -373,6 +373,14 @@
     return this.builder.makeInvocationExpression(
       callee, argumentValues
     );
+  };
+
+
+  var OptionalExpressionContexts = {
+    "statement-argument": true,
+    "array-literal": true,
+    "object-literal": true,
+    "argument-list": true
   };
 
   // Parses a single expression. Handles nesting.
@@ -421,6 +429,7 @@
       // Single key/value pair within object literal.
       case "object-literal":
         terminators = "},:";
+        rewindChars = ":";
         break;
 
       default:
@@ -504,15 +513,15 @@
           break;
 
         case "operator":
-          if (token.value === ",") {
-            if (terminators.indexOf(",") >= 0) {
-              // The comma operator has minimum precedence so in scenarios where
-              //  we want to abort at one, it's fine.
-              // We don't invoke the termination callback since commas never require
-              //  a special outer response
-              break iter;
+          if (terminators.indexOf(token.value) >= 0) {
+            if (rewindChars.indexOf(token.value) >= 0)
+              this.rewind(token);
 
-            } if (lhs) {
+            break iter;
+          }
+
+          if (token.value === ",") {
+            if (lhs) {
               // We could do this manually here, but it's easier to just fold the
               //  comma expression logic in with the rest of the precedence &
               //  associativity logic.
@@ -522,19 +531,6 @@
 
             } else {
               return this.abort("Expected expression before ,");
-            }
-
-          } else if (token.value === ":") {
-            if (terminators.indexOf(":") >= 0) {
-              // Like with the comma, we break but don't invoke the termination callback
-              break iter;
-            } else {
-              if (lhs) {
-                chain.pushExpression(lhs);
-                lhs = null;
-              }
-
-              chain.pushOperator(token.value);
             }
 
           } else if (token.value === ".") {
@@ -606,11 +602,7 @@
 
     if (!chain.length) {
       // In some contexts the expression being parsed is optional, so we don't fail.
-      if (
-        (context === "array-literal") ||
-        (context === "object-literal") ||
-        (context === "statement-argument")
-      )
+      if (OptionalExpressionContexts[context] === true)
         return false;
       else
         return this.abort("No expression parsed");
@@ -697,7 +689,7 @@
         return this.builder.makeExpressionStatement(expr);
     }
 
-    this.abort("No tokens read");
+    return false;
   };
 
 

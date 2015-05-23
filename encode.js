@@ -28,16 +28,18 @@ var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
 if (true) {
-  console.time("parse");
+  console.time("asm-parse");
   var inputReader = encoding.makeCharacterReader(inputJs);
   var astBuilder = new asmParse.JsonTreeBuilder();
   asmParse.parse(inputReader, astBuilder);
   var inputAst = astBuilder.result;
-  console.timeEnd("parse");
+  console.timeEnd("asm-parse");
+
+  process.exit(1);
 }
 
 if (false) {
-  console.time("tokenize");
+  console.time("asm-tokenize");
   var inputReader = encoding.makeCharacterReader(inputJs);
   var tokenizer = new asmParse.Tokenizer(inputReader);
 
@@ -46,7 +48,7 @@ if (false) {
     ;
   }
 
-  console.timeEnd("tokenize");
+  console.timeEnd("asm-tokenize");
   process.exit(1);
 }
 
