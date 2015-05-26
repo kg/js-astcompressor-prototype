@@ -22,6 +22,7 @@
 
   var TraceTokenization       = false;
   var TraceParsingStack       = false;
+  var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
 
 
@@ -46,36 +47,45 @@
     return indentChars;
   };
 
+  Parser.prototype.getStack = function () {
+    Error.stackTraceLimit = 256;
+
+    var r = /at ([A-Za-z0-9$_\.]*) /g;
+    var e = new Error();
+    var stack = e.stack;
+    var stackFrames = [], frame = null;
+
+    while ((frame = r.exec(stack)) !== null) {
+      frame = frame[1];
+      if (frame.indexOf("Parser.") !== 0)
+        continue;
+      else if (frame.indexOf(".readToken") >= 0)
+        continue;
+      else if (frame.indexOf(".expectToken") >= 0)
+        continue;
+      else if (frame.indexOf(".getStack") >= 0)
+        continue;
+      else if (frame.indexOf(".rewind") >= 0)
+        continue;
+
+      stackFrames.push(frame);
+    }
+
+    stackFrames.reverse();  
+    return stackFrames;
+  };
+
   Parser.prototype.readToken = function () {
     var result;
 
     var indentLevel = 0;
     if (TraceParsingStack) {
-      var r = /at ([A-Za-z0-9$_\.]*) /g;
-      Error.stackTraceLimit = 128;
-      var e = new Error();
-      var stack = e.stack;
-      var stackFrames = [], frame = null;
-
-      while ((frame = r.exec(stack)) !== null) {
-        frame = frame[1];
-        if (frame.indexOf("Parser.") !== 0)
-          continue;
-        else if (frame.indexOf(".readToken") >= 0)
-          continue;
-        else if (frame.indexOf(".expectToken") >= 0)
-          continue;
-
-        stackFrames.push(frame);
-      }
-
-      stackFrames.reverse();
-
+      var stackFrames = this.getStack();
       var newSubframes = false;
 
       for (var i = 0, l = Math.max(stackFrames.length, this.previousStackFrames.length); i < l; i++) {
         var previousFrame = this.previousStackFrames[i];
-        frame = stackFrames[i];
+        var frame = stackFrames[i];
 
         if (previousFrame === frame)
           continue;
@@ -104,7 +114,7 @@
       this._rewound = null;
 
       if (TraceTokenization)
-        console.log(this.getIndentChars(indentLevel) + "(rewound)");
+        console.log(this.getIndentChars(indentLevel) + "(rewound " + JSON.stringify(result.value) + ")");
     } else {
       result = this.tokenizer.read();
 
@@ -119,10 +129,15 @@
     if (arguments.length !== 1)
       throw new Error("Expected token");
 
-    if (this._rewound && (this._rewound !== token))
+    if (this._rewound && (this._rewound !== token)) {
       throw new Error("Already rewound");
-    else
+    } else {
+      if (TraceRewind) {
+        var stack = this.getStack();
+        console.log("Rewound token " + JSON.stringify(token) + " at " + stack[stack.length - 1]);
+      }
       this._rewound = token;
+    }
   };
 
   Parser.prototype.expectToken = function (type, value) {
@@ -205,11 +220,26 @@
     return this.builder.makeIfStatement(cond, trueStatement, falseStatement);
   };
 
+  Parser.prototype.parseForStatement = function () {
+    this.expectToken("separator", "(");
+
+    var init = this.parseExpression("for-expression");
+    var update = this.parseExpression("for-expression");
+    var terminate = this.parseExpression("for-expression");
+
+    var body = this.parseStatement();
+
+    return this.builder.makeForStatement(init, update, terminate, body);
+  };
+
   Parser.prototype.parseDeclarationStatement = function () {
     var declarations = [], token = null;
 
     var abort = false;
-    function aborter () { abort = true; }
+    function aborter (token) {
+      if (token === ";")
+        abort = true; 
+    }
 
     while ((token = this.readToken()) !== false) {
       if (token.type === "identifier") {
@@ -221,19 +251,23 @@
             // Initializer
             var initializer = this.parseExpression("declaration", aborter);
             declarations.push([variableName, initializer]);
+
+            if (abort)
+              break;
           } else if (token.value === ",") {
             // No initializer
             declarations.push([variableName]);
           }
-        } else {
-          // FIXME: Error handling?
-          this.rewind(token);
+        } else if (
+          (token.type === "separator") &&
+          (token.value === ";")
+        ) {
           break;
+        } else {
+          return this.abort("Unexpected token in declaration statement: " + JSON.stringify(token.value));
         }
       } else {
-        // FIXME: Error handling?
-        this.rewind(token);
-        break;
+        return this.abort("Unexpected token in declaration statement: " + JSON.stringify(token.value));
       }
     }
 
@@ -293,23 +327,31 @@
 
   // Parses complex keywords.
   // Returns false if the keyword was not handled by the parser.
+  // Returns [ false, expr ] if it parsed an expression.
+  // Returns [ true, stmt ] if it parsed a full statement.
   Parser.prototype.parseKeyword = function (keyword) {
+    if ((arguments.length !== 1) || (!keyword))
+      return this.abort("Expected a keyword");
+
     switch (keyword) {
       case "function":
-        return this.parseFunctionExpression();
+        return [false, this.parseFunctionExpression()];
 
       case "if":
-        return this.parseIfStatement();
+        return [true, this.parseIfStatement()];
+
+      case "for":
+        return [true, this.parseForStatement()];
 
       case "var":
       case "const":
-        return this.parseDeclarationStatement();
+        return [true, this.parseDeclarationStatement()];
 
       case "return":
-        return this.parseReturnStatement();
+        return [true, this.parseReturnStatement()];
 
       case "throw":
-        return this.parseThrowStatement();
+        return [true, this.parseThrowStatement()];
 
       default:
         return false;
@@ -390,6 +432,8 @@
   Parser.prototype.parseExpression = function (context, terminatorCallback) {
     var terminators, stopAtKeywords = false, rewindChars = "";
 
+    var unexpected = "});";
+
     switch (context) {
       // Return statement.
       case "statement-argument":
@@ -398,39 +442,52 @@
 
       // Free-standing expression (no surrounding parentheses).
       case "statement":
-        terminators = ";}"
+        terminators = ";}";
         rewindChars = "}";
+        unexpected = ")";
         break;
 
       // Parenthesized expression.
       case "subexpression":
-        terminators = ")"
+        terminators = ")";
+        unexpected = ";}";
         break;
 
       // Single declarator in a var/const statement.
       case "declaration":
         terminators = ";},";
         rewindChars = "}";
+        unexpected = ")";
         break;
 
       // Array subscript index.
       case "subscript":
-        terminators = "]"
+        terminators = "]";
+        unexpected = "});";
+        break;
+
+      // Part of a for (a;b;c) expression
+      case "for-expression":
+        terminators = ");";
+        unexpected = "}";
         break;
 
       // Single argument within argument list.
       case "argument-list":
         terminators = "),";
+        unexpected = "};";
         break;
 
       // Single value within array literal.
       case "array-literal":
         terminators = "],";
+        unexpected = "};)";
         break;
 
       // Single key/value pair within object literal.
       case "object-literal":
         terminators = "},";
+        unexpected = "];)";
         break;
 
       default:
@@ -466,6 +523,8 @@
               this.rewind(token);
 
             break iter;
+          } else if (unexpected.indexOf(token.value) >= 0) {
+            return this.abort("Unexpected '" + token.value + "' in context '" + context + "'");
           }
 
           switch (token.value) {
@@ -519,6 +578,8 @@
               this.rewind(token);
 
             break iter;
+          } else if (unexpected.indexOf(token.value) >= 0) {
+            return this.abort("Unexpected '" + token.value + "' in context '" + context + "'");
           }
 
           if (token.value === ",") {
@@ -568,11 +629,10 @@
 
         case "keyword":
           if (stopAtKeywords) {
-            if (terminatorCallback) {
-              if (terminatorCallback(token.value) === true)
-                this.rewind(token);
-            }
+            if (terminatorCallback)
+              terminatorCallback(token.value);
 
+            this.rewind(token);
             break iter;
           }
 
@@ -581,7 +641,23 @@
           if (kw === false) {
             return this.abort("Unhandled keyword '" + token.value + "' in expression");
           } else {
-            lhs = kw;
+            if (kw[0]) {
+              if (lhs || chain.length) {
+                console.log(lhs);
+                console.log(chain.items);
+                return this.abort("Unhandled keyword statement (" + token.value + ") in the middle of an expression");
+              } else {
+                return kw[1];
+              }
+            } else {
+              if (lhs) {
+                console.log(lhs);
+                console.log(chain.items);
+                this.abort("Keyword expression following expression");
+              } else {
+                lhs = kw[1];
+              }
+            }
           }
 
           break;
@@ -611,7 +687,7 @@
       if (OptionalExpressionContexts[context] === true)
         return false;
       else
-        return this.abort("No expression parsed");
+        return this.abort("No expression parsed in context " + context);
     }
 
     // The common case is going to be a chain containing exactly one expression.
@@ -643,6 +719,15 @@
     iter:
     while (token = this.readToken()) {
       switch (token.type) {
+        case "keyword":
+          var kwOrExpr = this.parseKeyword(token.value);
+          if (kwOrExpr !== false) {
+            expr = kwOrExpr[1];
+            break iter;
+          } else {
+            break;
+          }
+
         case "separator":
           switch (token.value) {
             case "{":
@@ -665,10 +750,6 @@
               //  no-op statements, and this lets us avoid conditionally
               //  eating a trailing ;.
               continue iter;
-
-            case "(":              
-              expr = this.parseExpression("subexpression");
-              break iter;
 
             default:
               // Fall-through

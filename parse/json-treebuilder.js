@@ -56,6 +56,15 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeForStatement = function (initialize, update, condition, body) {
+    var result = this.make("ForStatement");
+    result.initialize = initialize;
+    result.update = update;
+    result.condition = condition;
+    result.body = body;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionStatement = function (functionExpression) {
     var result = this.make("FunctionStatement");
     result.functionExpression = functionExpression;
