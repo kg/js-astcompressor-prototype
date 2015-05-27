@@ -232,14 +232,14 @@
 
     var cond = this.parseExpression("subexpression");
 
-    var trueStatement = this.parseStatement(), falseStatement = null;
+    var trueStatement = this.parseBlockOrStatement(), falseStatement = null;
 
     var maybeElse = this.readToken();
     if (
       (maybeElse.type === "keyword") &&
       (maybeElse.value === "else")
     ) {
-      falseStatement = this.parseStatement();
+      falseStatement = this.parseBlockOrStatement();
     } else {
       this.rewind(maybeElse);
     }
@@ -299,7 +299,7 @@
 
     if (wasForIn) {
       // for (a in b) { ... }
-      var body = this.parseStatement();
+      var body = this.parseBlockOrStatement();
 
       return this.builder.makeForInStatement(init, body);
     } else {
@@ -307,7 +307,7 @@
       var update = this.parseExpression("for-expression");
       var terminate = this.parseExpression("for-expression");
 
-      var body = this.parseStatement();
+      var body = this.parseBlockOrStatement();
 
       return this.builder.makeForStatement(init, update, terminate, body);
     }
@@ -318,17 +318,13 @@
 
     var condition = this.parseExpression("subexpression");
 
-    this.expectToken("separator", "{");
-
-    var body = this.parseStatement();
+    var body = this.parseBlockOrStatement();
 
     return this.builder.makeWhileStatement(condition, body);
   };
 
   Parser.prototype.parseDoWhileStatement = function () {
-    this.expectToken("separator", "{");
-
-    var body = this.parseStatement();
+    var body = this.parseBlockOrStatement();
 
     this.expectToken("keyword", "while");
     this.expectToken("separator", "(");
@@ -973,6 +969,26 @@
       return this.abort("Left with more than one result after expression resolution");
     }
   };
+
+  // Parses a single statement or a {}-enclosed block.
+  // Handles constructs like 'if (1) a else b'
+  Parser.prototype.parseBlockOrStatement = function (aborter) {
+    var token = this.readToken();
+    if (
+      (token.type === "separator") &&
+      (token.value === "{")
+    ) {
+      var childBlock = this.builder.makeBlock();
+      var stmt = this.builder.makeBlockStatement(childBlock);
+
+      this.parseBlockInterior(childBlock);
+
+      return stmt;
+    } else {
+      this.rewind(token);
+      return this.parseStatement(aborter);
+    }
+  }
 
   // parses a single statement, returns false if it hit a block-closing token.
   // handles nested blocks.
