@@ -20,7 +20,7 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = true;
+  var TraceTokenization       = false;
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
@@ -296,6 +296,31 @@
     }
   };
 
+  Parser.prototype.parseWhileStatement = function () {
+    this.expectToken("separator", "(");
+
+    var condition = this.parseExpression("subexpression");
+
+    this.expectToken("separator", "{");
+
+    var body = this.parseStatement();
+
+    return this.builder.makeWhileStatement(condition, body);
+  };
+
+  Parser.prototype.parseDoWhileStatement = function () {
+    this.expectToken("separator", "{");
+
+    var body = this.parseStatement();
+
+    this.expectToken("keyword", "while");
+    this.expectToken("separator", "(");
+
+    var condition = this.parseExpression("subexpression");
+
+    return this.builder.makeDoWhileStatement(condition, body);
+  };
+
   Parser.prototype.parseSwitchStatement = function () {
     this.expectToken("separator", "(");
 
@@ -385,6 +410,9 @@
             (token.value === "}")
           )
         ) {
+          // No initializer
+          declarations.push([variableName]);
+
           if (token.value === "}")
             this.rewind(token);
 
@@ -483,6 +511,12 @@
 
       case "for":
         return [true, this.parseForStatement()];
+
+      case "do":
+        return [true, this.parseDoWhileStatement()];
+
+      case "while":
+        return [true, this.parseWhileStatement()];
 
       case "var":
       case "const":

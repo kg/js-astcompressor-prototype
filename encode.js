@@ -27,17 +27,6 @@ var shapes = astEncoder.ShapeTable.fromJson(
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
-if (true) {
-  console.time("asm-parse");
-  var inputReader = encoding.makeCharacterReader(inputJs);
-  var astBuilder = new asmParse.JsonTreeBuilder();
-  asmParse.parse(inputReader, astBuilder);
-  var inputAst = astBuilder.result;
-  console.timeEnd("asm-parse");
-
-  process.exit(1);
-}
-
 if (false) {
   console.time("asm-tokenize");
   var inputReader = encoding.makeCharacterReader(inputJs);
@@ -49,6 +38,19 @@ if (false) {
   }
 
   console.timeEnd("asm-tokenize");
+  process.exit(1);
+}
+
+if (true) {
+  console.time("asm-parse");
+  var inputReader = encoding.makeCharacterReader(inputJs);
+  var astBuilder = new asmParse.JsonTreeBuilder();
+  var inputAst = asmParse.parse(inputReader, astBuilder);
+  console.timeEnd("asm-parse");
+
+  if (outputAstFile)
+    fs.writeFileSync(outputAstFile, JSON.stringify(inputAst));
+
   process.exit(1);
 }
 

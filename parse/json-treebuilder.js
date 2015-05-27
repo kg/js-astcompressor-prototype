@@ -10,7 +10,6 @@
   }
 }(this, function (exports) {
   function JsonTreeBuilder () {
-    this.result = null;
     this.protos = Object.create(null);
   };
 
@@ -68,6 +67,20 @@
   JsonTreeBuilder.prototype.makeForInStatement = function (declaration, body) {
     var result = this.make("ForInStatement");
     result.declaration = declaration;
+    result.body = body;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeWhileStatement = function (condition, body) {
+    var result = this.make("WhileStatement");
+    result.condition = condition;
+    result.body = body;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeDoWhileStatement = function (condition, body) {
+    var result = this.make("DoWhileStatement");
+    result.condition = condition;
     result.body = body;
     return result;
   };
