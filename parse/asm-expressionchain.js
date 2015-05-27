@@ -39,6 +39,11 @@
     this.trace = trace || false;
   };
 
+  ExpressionChain.prototype.abort = function (msg) {
+    this.log(true);
+    throw new Error(msg);
+  };
+
   ExpressionChain.prototype.pushExpression = function (e) {
     this.items.push(new ChainExpressionNode(e));
   };
@@ -107,7 +112,7 @@
             );
             this.replaceWithExpression(i, i + 1, newExpression)
           } else {
-            throw new Error("Found a '" + this.at(i) + "' surrounded by operators");
+            return this.abort("Found a '" + this.at(i) + "' surrounded by operators");
           }
 
           break;
@@ -137,7 +142,7 @@
         case "delete":
         case "new":
           if (!this.isExpression(i + 1))
-            throw new Error("Found a prefix operator before a non-expression");
+            return this.abort("Found a prefix operator before a non-expression");
 
           var rhs = this.at(i + 1);
           var newExpression = this.builder.makeUnaryOperatorExpression(
@@ -167,7 +172,7 @@
             !this.isExpression(i - 1) ||
             !this.isExpression(i + 1)
           )
-            throw new Error("Found a binary operator without a lhs & rhs");
+            return this.abort("Found a binary operator without a lhs & rhs");
 
           var lhs = this.at(i - 1);
           var rhs = this.at(i + 1);
@@ -223,7 +228,7 @@
 
         if (colon !== ":") {
           console.log(i, this.items);
-          throw new Error("Expected : in ternary expression but found " + colon);
+          return this.abort("Expected : in ternary expression but found " + colon);
         }
 
         var newExpression = this.builder.makeTernaryOperatorExpression(
@@ -258,7 +263,7 @@
             !this.isExpression(i - 1) ||
             !this.isExpression(i + 1)
           )
-            throw new Error("Found an assignment operator without a lhs & rhs");
+            return this.abort("Found an assignment operator without a lhs & rhs");
 
           // TODO: Assert that LHS is an identifier?
 

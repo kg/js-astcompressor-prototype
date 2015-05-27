@@ -47,6 +47,13 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeLabelStatement = function (labels, block) {
+    var result = this.make("LabelStatement");
+    result.labels = labels;
+    result.block = block;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeIfStatement = function (condition, trueStatement, falseStatement) {
     var result = this.make("IfStatement");
     result.condition = condition;

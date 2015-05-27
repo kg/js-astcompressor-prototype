@@ -20,7 +20,7 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = true;
+  var TraceTokenization       = false;
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
@@ -673,6 +673,25 @@
     );
   };
 
+  Parser.prototype.parseLabelStatement = function (firstLabel) {
+    var labels = [firstLabel];
+
+    var token;
+    while (token = this.readToken()) {
+      if (token.type === "identifier") {
+        labels.push(token.value);
+        this.expectToken("operator", ":");
+      } else {
+        this.rewind(token);
+        break;
+      }
+    }
+
+    var block = this.parseBlockOrStatement();
+
+    return this.builder.makeLabelStatement(labels, block);
+  };
+
 
   var OptionalExpressionContexts = {
     "statement-argument": true,
@@ -763,6 +782,11 @@
     var chain = new ExpressionChain(this.builder, TraceOperatorPrecedence);
     // Stores the most recently constructed expression. Some tokens wrap this or modify it
     var lhs = null;
+
+    // HACK: Used to detect whether a : indicates a labelled block
+    var seenTernaryMarker = false;
+    // HACK: Used to recover the identifier preceding a labelled block :
+    var priorIdentifier;
 
     iter:
     while (token = this.readToken()) {
@@ -869,6 +893,17 @@
             //  so that at the end of things we can order them by precedence
             //  and apply associativity.
 
+            if (token.value === "?") {
+              seenTernaryMarker = true;
+            } else if (
+              !seenTernaryMarker &&
+              (token.value === ":")
+            ) {
+              // HACK: Bail out of expression parsing and parse a labelled block.
+              // We pass in the identifier we already parsed.
+              return this.parseLabelStatement(priorIdentifier);
+            }
+
             if (lhs) {
               chain.pushExpression(lhs);
               lhs = null;
@@ -880,6 +915,7 @@
           break;
 
         case "identifier":
+          priorIdentifier = token.value;
           lhs = this.builder.makeIdentifierExpression(token.value);
           break;
 
