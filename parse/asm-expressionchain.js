@@ -276,6 +276,31 @@
     }
   };
 
+  ExpressionChain.prototype.applyCommaOperator = function () {
+    this.log();
+
+    var expressions = [];
+
+    for (var i = 0; i < this.length; i++) {
+      if (!this.isOperator(i)) {
+        var expr = this.at(i);
+
+        expressions.push(expr);
+      } else {
+        var op = this.at(i);
+
+        if (op !== ",") {
+          // Bail out; we hit a non-expression that isn't a , operator
+          // The caller will notice it has an unresolved chain and abort
+          return;
+        }
+      }
+    }
+
+    var newExpression = this.builder.makeCommaExpression(expressions);
+    this.replaceWithExpression(0, this.length - 1, newExpression);
+  };
+
   Object.defineProperty(ExpressionChain.prototype, "length", {
     enumerable: true,
     configurable: false,

@@ -130,6 +130,12 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeCommaExpression = function (expressions) {
+    var result = this.make("Comma");
+    result.expressions = expressions;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     var result = this.make("Function");
     result.name = name;

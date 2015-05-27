@@ -615,7 +615,8 @@
     "statement-argument": true,
     "array-literal": true,
     "object-literal": true,
-    "argument-list": true
+    "argument-list": true,
+    "for-expression": true
   };
 
   // Parses a single expression. Handles nesting.
@@ -902,6 +903,7 @@
       chain.applyBinaryOperators();
       chain.applyTernaryOperator();
       chain.applyAssignmentOperators();
+      chain.applyCommaOperator();
     }
 
     if (chain.length === 1)
