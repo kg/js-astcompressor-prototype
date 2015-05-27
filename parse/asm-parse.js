@@ -920,6 +920,14 @@
               // HACK: Bail out of expression parsing and parse a labelled block.
               // We pass in the identifier we already parsed.
               return this.parseLabelStatement(priorIdentifier);
+            } else if (
+              (token.value === "in") &&
+              (context === "for-expression")
+            ) {
+              if (!priorIdentifier)
+                return this.abort("Expected variable name before 'in' within 'for (x in y)' block");
+              
+              return this.parseForInDeclaration(priorIdentifier);
             }
 
             if (lhs) {
