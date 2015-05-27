@@ -230,24 +230,40 @@
 
   Tokenizer.prototype.readOperator = function (ch, ch2) {
     var length = 1;
+    var ch3 = this.reader.peek(2), ch4 = this.reader.peek(3);
 
     switch (ch) {
       case LessThan:
-        length = (
-            (ch2 === LessThan) ||
-            (ch2 === Equal)
-          ) ? 2 : 1;
+        if (ch2 === LessThan) {
+          if (ch3 === Equal)
+            length = 3;
+          else
+            length = 2;
+        } else if (ch2 === Equal) {
+          length = 2;
+        } else {
+          length = 1;
+        }
 
         break;
 
       case GreaterThan:
-        length = (
-            (ch2 === GreaterThan) &&
-            (this.reader.peek(2) === GreaterThan)
-          ) ? 3 : (
-            (ch2 === GreaterThan) ||
-            (ch2 === Equal)
-          ) ? 2 : 1;
+        if (ch2 === GreaterThan) {
+          if (ch3 === Equal)
+            length = 3;
+          else if (ch3 === GreaterThan) {
+            if (ch4 === Equal)
+              length = 4;
+            else
+              length = 3;
+          } else {
+            length = 2;
+          }
+        } else if (ch2 === Equal) {
+          length = 2;
+        } else {
+          length = 1;
+        }
 
         break;
 
