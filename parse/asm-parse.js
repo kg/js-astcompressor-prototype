@@ -20,7 +20,7 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = false;
+  var TraceTokenization       = true;
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
@@ -30,6 +30,11 @@
     this.tokenizer = tokenizer;
     this.builder = treeBuilder;
     this._rewound = null;
+
+    // HACK: GROSS.
+    // Replace with some sort of pervasive 'parsing context' argument that
+    //  can be overridden when parsing certain subtrees?
+    this._forInStack = [];
 
     if (TraceParsingStack)
       this.previousStackFrames = [];
@@ -223,13 +228,26 @@
   Parser.prototype.parseForStatement = function () {
     this.expectToken("separator", "(");
 
+    this._forInStack.push(false);
+
     var init = this.parseExpression("for-expression");
-    var update = this.parseExpression("for-expression");
-    var terminate = this.parseExpression("for-expression");
 
-    var body = this.parseStatement();
+    var wasForIn = this._forInStack.pop();
 
-    return this.builder.makeForStatement(init, update, terminate, body);
+    if (wasForIn) {
+      // for (a in b) { ... }
+      var body = this.parseStatement();
+
+      return this.builder.makeForInStatement(init, body);
+    } else {
+      // for (a;b;c) { ... }
+      var update = this.parseExpression("for-expression");
+      var terminate = this.parseExpression("for-expression");
+
+      var body = this.parseStatement();
+
+      return this.builder.makeForStatement(init, update, terminate, body);
+    }
   };
 
   Parser.prototype.parseDeclarationStatement = function () {
@@ -257,6 +275,15 @@
           } else if (token.value === ",") {
             // No initializer
             declarations.push([variableName]);
+          } else if (token.value === "in") {
+            // FIXME: Reject this outside any non-for-loop context
+            if (declarations.length !== 0) {
+              return this.abort("Found 'in' operator in declaration statement after a declaration");
+            } else {
+              return this.parseForInDeclaration(variableName);
+            }
+          } else {
+            return this.abort("Unexpected operator in declaration statement: " + JSON.stringify(token.value));
           }
         } else if (
           (token.type === "separator") &&
@@ -272,6 +299,15 @@
     }
 
     return this.builder.makeDeclarationStatement(declarations);
+  };
+
+  Parser.prototype.parseForInDeclaration = function (variableName) {
+    var sequenceExpression = this.parseExpression("for-expression");
+
+    if (this._forInStack.length)
+      this._forInStack[this._forInStack.length - 1] = true;
+
+    return this.builder.makeForInDeclaration(variableName, sequenceExpression);
   };
 
   Parser.prototype.parseFunctionExpression = function () {
@@ -354,6 +390,7 @@
         return [true, this.parseThrowStatement()];
 
       default:
+        return this.abort("Unhandled keyword '" + keyword + "'");
         return false;
     }
   };

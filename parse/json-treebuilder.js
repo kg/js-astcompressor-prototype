@@ -65,6 +65,13 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeForInStatement = function (declaration, body) {
+    var result = this.make("ForInStatement");
+    result.declaration = declaration;
+    result.body = body;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionStatement = function (functionExpression) {
     var result = this.make("FunctionStatement");
     result.functionExpression = functionExpression;
@@ -74,6 +81,13 @@
   JsonTreeBuilder.prototype.makeDeclarationStatement = function (declarations) {
     var result = this.make("DeclarationStatement");
     result.declarations = declarations;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeForInDeclaration = function (variableName, sequenceExpression) {
+    var result = this.make("ForInDeclaration");
+    result.variableName = variableName;
+    result.sequenceExpression = sequenceExpression;
     return result;
   };
 
