@@ -536,7 +536,7 @@
 
   Parser.prototype.parseInvocation = function (callee) {
     var argumentValues = [], argumentValue = null, abort = false;
-    function aborter () { abort = true; }
+    function aborter () { abort = true; };
 
     while (
       !abort && 
@@ -799,11 +799,15 @@
 
           break;
 
+        case "regexp":
         case "integer":
         case "double":
         case "string":
           lhs = this.builder.makeLiteralExpression(token.type, token.value);
           break;
+
+        default:
+          return this.abort("Unhandled token in expression context " + JSON.stringify(token));
       }
     }
 
