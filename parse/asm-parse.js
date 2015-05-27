@@ -21,7 +21,7 @@
 
 
   var TraceTokenization       = false;
-  var TraceTokensLightweight  = false;
+  var TraceTokensLightweight  = true;
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
@@ -890,10 +890,21 @@
           } else if (token.value === ".") {
             // Member access operator
             if (!lhs)
-              this.abort("Expected expression before .");
+              return this.abort("Expected expression before .");
 
-            var identifier = this.expectToken("identifier");
-            lhs = this.builder.makeMemberAccessExpression(lhs, identifier);
+            var memberName = this.readToken();
+            if (
+              (memberName.type === "identifier") ||
+              (memberName.type === "keyword") ||
+              (
+                (memberName.type === "operator") &&
+                tokenizer.isIdentifierPrefix(memberName.value.charCodeAt(0))
+              )
+            ) {
+              lhs = this.builder.makeMemberAccessExpression(lhs, memberName.value);
+            } else {
+              return this.abort("Expected identifier or keyword after '.', got " + JSON.stringify(memberName));
+            }
 
           } else {
             // Operators push expressions and themselves onto the chain
@@ -1002,8 +1013,8 @@
       chain.applyDecrementAndIncrement();
       chain.applyUnaryOperators();
       chain.applyBinaryOperators();
-      chain.applyTernaryOperator();
       chain.applyAssignmentOperators();
+      chain.applyTernaryOperator();
       chain.applyCommaOperator();
 
       if (TraceExpressions)

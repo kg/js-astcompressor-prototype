@@ -482,4 +482,6 @@
   exports.Tokenizer = Tokenizer;
 
   exports.skipDeadSpace = skipDeadSpace;
+  exports.isIdentifierPrefix = isIdentifierPrefix;
+  exports.isIdentifierBody = isIdentifierBody;
 }));
