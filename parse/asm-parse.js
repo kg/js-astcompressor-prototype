@@ -24,7 +24,7 @@
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
-  var TraceStatements         = false;
+  var TraceStatements         = true;
 
 
   function Parser (tokenizer, treeBuilder) {
@@ -174,6 +174,9 @@
 
     this.parseBlockInterior(result);
 
+    if (this.readToken())
+      return this.abort("Top-level parsing aborted too early");
+
     return result;
   };
 
@@ -190,12 +193,15 @@
       var stmt = this.parseStatement(aborter);
 
       if (abortedBy !== null) {
-        if (TraceStatements)
-          console.log("end of block (aborted by '" + abortedBy + "')");
         break;
       } else if (stmt) {
-        if (TraceStatements)
-          console.log("statement " + stmt.type);
+        if (TraceStatements) {
+          var json = JSON.stringify(stmt);
+          var limit = 96;
+          if (json.length > limit)
+            json = json.substr(0, limit);
+          console.log("statement " + json);
+        }
         this.builder.appendToBlock(block, stmt);
       } else {
         if (TraceStatements)
@@ -469,6 +475,9 @@
       return this.abort("Expected a function name or an argument name list");
     }
 
+    if (TraceStatements)
+      console.log("Beginning of function", name);
+
     var argumentNames = [];
 
     while (
@@ -499,6 +508,9 @@
 
     var body = this.builder.makeBlock();
     this.parseBlockInterior(body);
+
+    if (TraceStatements)
+      console.log("end of function", name);
 
     return this.builder.makeFunctionExpression(
       name, argumentNames, body
