@@ -24,6 +24,7 @@
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
+  var TraceStatements         = false;
 
 
   function Parser (tokenizer, treeBuilder) {
@@ -182,14 +183,24 @@
     if (!block || !block.statements)
       return this.abort("Expected a block argument");
 
+    var abortedBy = null;
+    function aborter (token) { abortedBy = token; }
+
     while (true) {
-      var stmt = this.parseStatement(block);
+      var stmt = this.parseStatement(aborter);
 
-      if (stmt === false)
+      if (abortedBy !== null) {
+        if (TraceStatements)
+          console.log("end of block (aborted by '" + abortedBy + "')");
         break;
-
-      // console.log("Statement", stmt);
-      this.builder.appendToBlock(block, stmt);
+      } else if (stmt) {
+        if (TraceStatements)
+          console.log("statement " + stmt.type);
+        this.builder.appendToBlock(block, stmt);
+      } else {
+        if (TraceStatements)
+          console.log("empty statement");
+      }
     }
   };
 
@@ -498,8 +509,8 @@
   // Returns false if the keyword was not handled by the parser.
   // Returns [ false, expr ] if it parsed an expression.
   // Returns [ true, stmt ] if it parsed a full statement.
-  Parser.prototype.parseKeyword = function (keyword) {
-    if ((arguments.length !== 1) || (!keyword))
+  Parser.prototype.parseKeyword = function (keyword, aborter) {
+    if ((arguments.length < 1) || (!keyword))
       return this.abort("Expected a keyword");
 
     switch (keyword) {
@@ -547,7 +558,10 @@
         // If encountered outside a switch statement, someone screwed up.
         if (this._switchStack.length) {
           // Invoke the callback to notify the switch parser that we hit
-          //  another case.          
+          //  another case.
+          if (aborter)
+            aborter(keyword);
+
           this._switchStack[this._switchStack.length - 1](keyword);
           return [false, false];
         } else {
@@ -950,14 +964,14 @@
 
   // parses a single statement, returns false if it hit a block-closing token.
   // handles nested blocks.
-  Parser.prototype.parseStatement = function (block) {
+  Parser.prototype.parseStatement = function (aborter) {
     var token = null, stmt = null, expr = null;
 
     iter:
     while (token = this.readToken()) {
       switch (token.type) {
         case "keyword":
-          var kwOrExpr = this.parseKeyword(token.value);
+          var kwOrExpr = this.parseKeyword(token.value, aborter);
           if (kwOrExpr !== false) {
             expr = kwOrExpr[1];
             break iter;
@@ -980,13 +994,16 @@
               return stmt;
 
             case "}":
+              if (aborter)
+                aborter("}");
+
               return false;
 
             case ";":
               // HACK: Just skip stray semicolons. We don't care about
               //  no-op statements, and this lets us avoid conditionally
               //  eating a trailing ;.
-              continue iter;
+              break iter;
 
             default:
               // Fall-through

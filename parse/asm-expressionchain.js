@@ -277,6 +277,9 @@
   };
 
   ExpressionChain.prototype.applyCommaOperator = function () {
+    if (this.length === 1)
+      return;
+
     this.log();
 
     var expressions = [];
