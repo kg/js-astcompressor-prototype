@@ -230,6 +230,47 @@
     return this.builder.makeIfStatement(cond, trueStatement, falseStatement);
   };
 
+  Parser.prototype.parseTryStatement = function () {
+    this.expectToken("separator", "{");
+
+    var body = this.builder.makeBlock(), catchBlock = null, finallyBlock = null;
+    this.parseBlockInterior(body);
+
+    var maybeCatchOrFinally;
+    while (maybeCatchOrFinally = this.readToken()) {
+      if (maybeCatchOrFinally.type === "keyword") {
+        if (maybeCatchOrFinally.value === "catch") {
+          if (catchBlock)
+            return this.abort("Try block already has a catch block");
+
+          this.expectToken("separator", "(");
+          var catchExpr = this.parseExpression("subexpression");
+
+          this.expectToken("separator", "{");
+          catchBlock = this.builder.makeBlock();
+          this.parseBlockInterior(catchBlock);
+
+        } else if (maybeCatchOrFinally.value === "finally") {
+          this.expectToken("separator", "{");
+          finallyBlock = this.builder.makeBlock();
+          this.parseBlockInterior(finallyBlock);
+
+          break;
+        } else {
+          // Some sort of free-standing keyword like a 'return' statement
+          this.rewind(maybeCatchOrFinally);
+          break;
+        }
+      } else {
+        // TODO: Abort if we parsed a try block without a catch or finally
+        this.rewind(maybeCatchOrFinally);
+        break;
+      }
+    }
+
+    return this.builder.makeTryStatement(body, catchBlock, finallyBlock);
+  };
+
   Parser.prototype.parseForStatement = function () {
     this.expectToken("separator", "(");
 
@@ -279,6 +320,7 @@
         caseKey = null;
 
         this.expectToken("operator", ":");
+
       } else if (newCaseType === "case") {
         caseKey = this.parseExpression("case-expression");
         if (!caseKey)
@@ -338,12 +380,24 @@
           }
         } else if (
           (token.type === "separator") &&
-          (token.value === ";")
+          (
+            (token.value === ";") ||
+            (token.value === "}")
+          )
         ) {
+          if (token.value === "}")
+            this.rewind(token);
+
           break;
         } else {
           return this.abort("Unexpected token in declaration statement: " + JSON.stringify(token.value));
         }
+      } else if (
+        (token.type === "separator") &&
+        (token.value === "}")
+      ) {
+        this.rewind(token);
+        break;
       } else {
         return this.abort("Unexpected token in declaration statement: " + JSON.stringify(token.value));
       }
@@ -449,6 +503,9 @@
       case "switch":
         return [true, this.parseSwitchStatement()];
 
+      case "try":
+        return [true, this.parseTryStatement()];
+
       case "case":
       case "default":
         // HACK: 'case' and 'default' detected in a statement/expression
@@ -518,8 +575,11 @@
         (token.value === "}")
       )
         break;
-      else if (token.type !== "identifier")
-        return this.abort("Expected identifier or }");
+      else if (
+        (token.type !== "identifier") &&
+        (token.type !== "string")
+      )
+        return this.abort("Expected identifier, string or }");
 
       var colon = this.expectToken("operator", ":");
 

@@ -122,6 +122,14 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeTryStatement = function (body, catchBlock, finallyBlock) {
+    var result = this.make("TryStatement");
+    result.body = body;
+    result.catchBlock = catchBlock;
+    result.finallyBlock = finallyBlock;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     var result = this.make("Function");
     result.name = name;
