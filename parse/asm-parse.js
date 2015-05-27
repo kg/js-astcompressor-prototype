@@ -27,6 +27,7 @@
   var TraceOperatorPrecedence = false;
   var TraceExpressions        = false;
   var TraceStatements         = false;
+  var TraceFullStatements     = false;
 
 
   function Parser (tokenizer, treeBuilder) {
@@ -217,16 +218,18 @@
       if (abortedBy !== null) {
         break;
       } else if (stmt) {
-        if (TraceStatements) {
+        if (TraceFullStatements) {
+          console.log("statement", stmt);
+        } else if (TraceStatements) {
           var json = JSON.stringify(stmt);
-          var limit = 96;
+          var limit = TraceFullStatements ? 9999 : 96;
           if (json.length > limit)
             json = json.substr(0, limit);
           console.log("statement " + json);
         }
         this.builder.appendToBlock(block, stmt);
       } else {
-        if (TraceStatements)
+        if (TraceFullStatements)
           console.log("empty statement");
       }
     }
@@ -604,28 +607,38 @@
     }
   };
 
-  Parser.prototype.parseContinueStatement = function () {
+  // HACK: break and continue statements have special ASI properties
+  //  so we need to be picky about how we parse them.
+  Parser.prototype.maybeReadTargetLabel = function () {
     var maybeLabel = this.readToken();
     var label = null;
 
     if (maybeLabel.type === "identifier") {
       label = maybeLabel.token;
-    } else {
+      maybeLabel = this.readToken();
+
+      // We got a label, so read another token to eat a trailing semi if necessary.
+    }
+
+    if (
+      // HACK: Don't rewind semicolons. Just eat them.
+      (maybeLabel.type !== "separator") ||
+      (maybeLabel.value !== ";")
+    ) {
       this.rewind(maybeLabel);
     }
+
+    return label;
+  };
+
+  Parser.prototype.parseContinueStatement = function () {
+    var label = this.maybeReadTargetLabel();
 
     return this.builder.makeContinueStatement(label);
   };
 
   Parser.prototype.parseBreakStatement = function () {
-    var maybeLabel = this.readToken();
-    var label = null;
-
-    if (maybeLabel.type === "identifier") {
-      label = maybeLabel.token;
-    } else {
-      this.rewind(maybeLabel);
-    }
+    var label = this.maybeReadTargetLabel();
 
     return this.builder.makeBreakStatement(label);
   };
