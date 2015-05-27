@@ -389,10 +389,36 @@
       case "throw":
         return [true, this.parseThrowStatement()];
 
+      case "continue":
+        return [true, this.parseContinueStatement()];
+
+      case "break":
+        return [true, this.parseBreakStatement()];
+
       default:
         return this.abort("Unhandled keyword '" + keyword + "'");
         return false;
     }
+  };
+
+  Parser.prototype.parseContinueStatement = function () {
+    var maybeLabel = this.readToken();
+    var label = null;
+
+    if (maybeLabel.type === "identifier")
+      label = maybeLabel.token;
+
+    return this.builder.makeContinueStatement(label);
+  };
+
+  Parser.prototype.parseBreakStatement = function () {
+    var maybeLabel = this.readToken();
+    var label = null;
+
+    if (maybeLabel.type === "identifier")
+      label = maybeLabel.token;
+
+    return this.builder.makeBreakStatement(label);
   };
 
   Parser.prototype.parseArrayLiteral = function () {

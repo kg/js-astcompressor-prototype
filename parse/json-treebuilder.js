@@ -97,6 +97,18 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeBreakStatement = function (label) {
+    var result = this.make("BreakStatement");
+    result.label = label;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makeContinueStatement = function (label) {
+    var result = this.make("ContinueStatement");
+    result.label = label;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeThrowStatement = function (expression) {
     var result = this.make("ThrowStatement");
     result.expression = expression;
