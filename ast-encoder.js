@@ -141,6 +141,22 @@
     this.root_id = null;
   };
 
+  function test () {
+    var a, b, c, d, e, f, g, h, i, j, k;
+    var b1, b2;
+    
+    i[b >> 0] = f;
+    if (c << 24 >> 24 != f << 24 >> 24) {
+        e = d + 56 | 0;
+        g = k[e >> 2] | 0;
+        if (g) {
+            k[g + 56 >> 2] = 0;
+            k[e >> 2] = 0
+        }
+    } else f = c;
+    if (f << 24 >> 24 != 0 ? (b2(3, h), c << 24 >> 24 != (i[b >> 0] | 0)) : 0) b1(d);
+  };
+
 
   // Converts an esprima ast into a JsAstModule.
   function astToModule (root, shapes) {

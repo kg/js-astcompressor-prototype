@@ -146,6 +146,11 @@
 
 
   function Token (type, value) {
+    if (arguments.length !== 2)
+      throw new Error("Expected (type, value)");
+    else if (!type)
+      throw new Error("Expected type");
+
     this.type = type;
     this.value = value;
   };

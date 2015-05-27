@@ -20,9 +20,9 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = false;
-  var TraceTokensLightweight  = true;
-  var TraceParsingStack       = false;
+  var TraceTokenization       = true;
+  var TraceTokensLightweight  = false;
+  var TraceParsingStack       = true;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
   var TraceExpressions        = false;
@@ -85,6 +85,8 @@
     return stackFrames;
   };
 
+  var numUndefineds = 0;
+
   Parser.prototype.readToken = function () {
     var result;
 
@@ -129,11 +131,22 @@
         console.log(this.getIndentChars(indentLevel) + "(rewound " + JSON.stringify(result.value) + ")");
     } else {
       result = this.tokenizer.read();
+      if (result === false) {
+        if (TraceTokensLightweight || TraceTokenization)
+          console.log(this.getIndentChars(indentLevel) + "<eof>");
+      } else {
+        if (TraceTokenization)
+          console.log(this.getIndentChars(indentLevel) + result.type, JSON.stringify(result.value));
+        else if (TraceTokensLightweight)
+          console.log(this.getIndentChars(indentLevel) + JSON.stringify(result.value));
+      }
+    }
 
-      if (TraceTokenization)
-        console.log(this.getIndentChars(indentLevel) + result.type, JSON.stringify(result.value));
-      else if (TraceTokensLightweight)
-        console.log(this.getIndentChars(indentLevel) + JSON.stringify(result.value));
+    if (!result || !result.type) {
+      numUndefineds += 1;
+
+      if (numUndefineds > 30)
+        return this.abort("Infinite loop at eof");
     }
 
     return result;
@@ -142,6 +155,9 @@
   Parser.prototype.rewind = function (token) {
     if (arguments.length !== 1)
       throw new Error("Expected token");
+
+    if (token === false)
+      throw new Error("Rewound non-token");
 
     if (this._rewound && (this._rewound !== token)) {
       throw new Error("Already rewound");
@@ -926,7 +942,7 @@
             ) {
               if (!priorIdentifier)
                 return this.abort("Expected variable name before 'in' within 'for (x in y)' block");
-              
+
               return this.parseForInDeclaration(priorIdentifier);
             }
 
@@ -1111,6 +1127,9 @@
 
       }
     }
+
+    if (token === false)
+      aborter(false);
 
     if (expr) {
       if (expr.type.indexOf("Statement"))
