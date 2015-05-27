@@ -20,9 +20,9 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = true;
+  var TraceTokenization       = false;
   var TraceTokensLightweight  = false;
-  var TraceParsingStack       = true;
+  var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
   var TraceExpressions        = false;
