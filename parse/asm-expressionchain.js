@@ -184,6 +184,23 @@
     }
   };
 
+  /*
+    A
+      ? a
+      : b
+
+    [A ? a : b]
+
+    A
+      ? 
+        B
+          ? a
+          : b
+      : c
+
+    [A ? B ? a : b : c]
+  */
+
   ExpressionChain.prototype.applyTernaryOperator = function () {
     this.log();
 
@@ -194,24 +211,28 @@
       var op = this.at(i);
 
       if (op === ":") {
-        var falseValue = this.at(i + 1);
-        var trueValue = this.at(i - 1);
-        var condMarker = this.at(i - 2);
+        // Scan for an ? and parse there to properly apply associativity
+        continue;
+      }
 
-        if (condMarker !== "?") {
+      if (op === "?") {
+        var condition = this.at(i - 1);
+        var trueValue = this.at(i + 1);
+        var colon = this.at(i + 2);
+        var falseValue = this.at(i + 3);
+
+        if (colon !== ":") {
           console.log(i, this.items);
-          throw new Error("Expected ? in ternary expression but found " + condMarker);
+          throw new Error("Expected : in ternary expression but found " + colon);
         }
-
-        var condition = this.at(i - 3);
 
         var newExpression = this.builder.makeTernaryOperatorExpression(
           condition, trueValue, falseValue
         );
-        this.replaceWithExpression(i - 3, i + 1, newExpression);
+        this.replaceWithExpression(i - 1, i + 3, newExpression);
 
         // FIXME: Not sure about this
-        i -= 2;
+        i -= 1;
       }
     }
   };
