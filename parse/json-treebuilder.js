@@ -115,6 +115,13 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeSwitchStatement = function (value, cases) {
+    var result = this.make("SwitchStatement");
+    result.value = value;
+    result.cases = cases;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     var result = this.make("Function");
     result.name = name;

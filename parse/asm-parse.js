@@ -35,6 +35,8 @@
     // Replace with some sort of pervasive 'parsing context' argument that
     //  can be overridden when parsing certain subtrees?
     this._forInStack = [];
+    // HACK: Parsing behavior for 'case' and 'default' is special
+    this._switchStack = [];
 
     if (TraceParsingStack)
       this.previousStackFrames = [];
@@ -147,15 +149,18 @@
 
   Parser.prototype.expectToken = function (type, value) {
     var token = this.readToken();
-    if (token.type === type) {
-      if ((arguments.length === 2) && (token.value !== value)) {
-        return this.abort("Expected a '" + type + "' with value '" + value + "', got '" + token.value + "'");
-      } else {
-        return token.value;
-      }
-    }
 
-    return this.abort("Expected a token of type '" + type + "', got '" + token.type + "'.");
+    var match = (token.type === type) &&
+      ((arguments.length === 1) || (token.value === value));
+
+    if (!match) {
+      if (arguments.length === 2)
+        return this.abort("Expected a " + type + " with value '" + value + "', got " + token.type + " '" + token.value + "'");
+      else
+        return this.abort("Expected a " + type + ", got " + token.type + " '" + token.value + "'");
+    } else {
+      return token.value;
+    }
   };
 
   Parser.prototype.abort = function () {
@@ -248,6 +253,52 @@
 
       return this.builder.makeForStatement(init, update, terminate, body);
     }
+  };
+
+  Parser.prototype.parseSwitchStatement = function () {
+    this.expectToken("separator", "(");
+
+    var value = this.parseExpression("subexpression");
+
+    this.expectToken("separator", "{");
+
+    var cases = [];
+
+    var maybeCase = this.readToken();
+    var newCaseType = (maybeCase.type === "keyword") ? maybeCase.value : null;
+
+    // HACK: The block parser will invoke this if it aborts due to hitting
+    //  a 'case' or 'default'
+    this._switchStack.push(function (keyword) {
+      newCaseType = keyword;
+    });
+
+    while (newCaseType) {
+      var caseKey;
+      if (newCaseType === "default") {
+        caseKey = null;
+
+        this.expectToken("operator", ":");
+      } else if (newCaseType === "case") {
+        caseKey = this.parseExpression("case-expression");
+        if (!caseKey)
+          return this.abort("Expected expression after 'case'");
+
+        // The : was consumed by parseExpression
+      } else {
+        return this.abort("Expected 'case' or 'default'");
+      }
+
+      newCaseType = null;
+      var body = this.builder.makeBlock();
+      this.parseBlockInterior(body);
+
+      cases.push(caseKey, body);
+    }
+
+    this._switchStack.pop();
+
+    return this.builder.makeSwitchStatement(value, cases);
   };
 
   Parser.prototype.parseDeclarationStatement = function () {
@@ -395,6 +446,23 @@
       case "break":
         return [true, this.parseBreakStatement()];
 
+      case "switch":
+        return [true, this.parseSwitchStatement()];
+
+      case "case":
+      case "default":
+        // HACK: 'case' and 'default' detected in a statement/expression
+        //  context mean we hit the end of a preceding switch case.
+        // If encountered outside a switch statement, someone screwed up.
+        if (this._switchStack.length) {
+          // Invoke the callback to notify the switch parser that we hit
+          //  another case.          
+          this._switchStack[this._switchStack.length - 1](keyword);
+          return [false, false];
+        } else {
+          return this.abort("Encountered '" + keyword + "' outside a switch statement");
+        }
+
       default:
         return this.abort("Unhandled keyword '" + keyword + "'");
         return false;
@@ -533,6 +601,12 @@
       case "for-expression":
         terminators = ");";
         unexpected = "}";
+        break;
+
+      // Case value in switch statement
+      case "case-expression":
+        terminators = ":";
+        unexpected = "})];";
         break;
 
       // Single argument within argument list.
