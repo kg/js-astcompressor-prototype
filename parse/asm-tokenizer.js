@@ -235,10 +235,12 @@
     switch (ch) {
       case LessThan:
         if (ch2 === LessThan) {
-          if (ch3 === Equal)
+          if (ch3 === Equal) {
             length = 3;
-          else
+          } else {
             length = 2;
+          }
+
         } else if (ch2 === Equal) {
           length = 2;
         } else {
@@ -249,16 +251,20 @@
 
       case GreaterThan:
         if (ch2 === GreaterThan) {
-          if (ch3 === Equal)
+          if (ch3 === Equal) {
             length = 3;
-          else if (ch3 === GreaterThan) {
-            if (ch4 === Equal)
+
+          } else if (ch3 === GreaterThan) {
+            if (ch4 === Equal) {
               length = 4;
-            else
+            } else {
               length = 3;
+            }
+
           } else {
             length = 2;
           }
+
         } else if (ch2 === Equal) {
           length = 2;
         } else {
@@ -270,7 +276,7 @@
       case Equal:
         length = (
             (ch2 === Equal) &&
-            (this.reader.peek(2) === Equal)
+            (ch3 === Equal)
           ) ? 3 : (ch2 === Equal) ? 2 : 1;
 
         break;
@@ -310,7 +316,7 @@
       case Exclamation:
         length = (
             (ch2 === Equal) &&
-            (this.reader.peek(2) === Equal)
+            (ch3 === Equal)
           ) ? 3 : (ch2 === Equal) ? 2 : 1;
 
         break;

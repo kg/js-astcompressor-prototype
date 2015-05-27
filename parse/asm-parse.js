@@ -21,6 +21,7 @@
 
 
   var TraceTokenization       = false;
+  var TraceTokensLightweight  = false;
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
@@ -124,11 +125,15 @@
 
       if (TraceTokenization)
         console.log(this.getIndentChars(indentLevel) + "(rewound " + JSON.stringify(result.value) + ")");
+      else if (TraceTokensLightweight)
+        console.log(this.getIndentChars(indentLevel) + "(rewound " + JSON.stringify(result.value) + ")");
     } else {
       result = this.tokenizer.read();
 
       if (TraceTokenization)
         console.log(this.getIndentChars(indentLevel) + result.type, JSON.stringify(result.value));
+      else if (TraceTokensLightweight)
+        console.log(this.getIndentChars(indentLevel) + JSON.stringify(result.value));
     }
 
     return result;
@@ -640,9 +645,11 @@
         break;
       else if (
         (token.type !== "identifier") &&
-        (token.type !== "string")
+        (token.type !== "string") &&
+        (token.type !== "integer") &&
+        (token.type !== "double")
       )
-        return this.abort("Expected identifier, string or }");
+        return this.abort("Expected identifier, literal or }, got " + JSON.stringify(token));
 
       var colon = this.expectToken("operator", ":");
 
