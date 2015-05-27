@@ -74,8 +74,8 @@
     this.items.splice(first, count, node);
   };
   
-  ExpressionChain.prototype.log = function () {
-    if (this.trace)
+  ExpressionChain.prototype.log = function (force) {
+    if (this.trace || force)
       console.log("chain", this.items);      
   }
 

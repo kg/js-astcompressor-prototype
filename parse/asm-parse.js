@@ -20,11 +20,12 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = false;
+  var TraceTokenization       = true;
   var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
-  var TraceStatements         = true;
+  var TraceExpressions        = false;
+  var TraceStatements         = false;
 
 
   function Parser (tokenizer, treeBuilder) {
@@ -586,8 +587,11 @@
     var maybeLabel = this.readToken();
     var label = null;
 
-    if (maybeLabel.type === "identifier")
+    if (maybeLabel.type === "identifier") {
       label = maybeLabel.token;
+    } else {
+      this.rewind(maybeLabel);
+    }
 
     return this.builder.makeContinueStatement(label);
   };
@@ -596,8 +600,11 @@
     var maybeLabel = this.readToken();
     var label = null;
 
-    if (maybeLabel.type === "identifier")
+    if (maybeLabel.type === "identifier") {
       label = maybeLabel.token;
+    } else {
+      this.rewind(maybeLabel);
+    }
 
     return this.builder.makeBreakStatement(label);
   };
@@ -862,11 +869,6 @@
             //  so that at the end of things we can order them by precedence
             //  and apply associativity.
 
-            if (token.value === ":") {
-              if (!chain.length)
-                return this.abort("Unexpected : early in expression");
-            }
-
             if (lhs) {
               chain.pushExpression(lhs);
               lhs = null;
@@ -960,6 +962,9 @@
       chain.applyTernaryOperator();
       chain.applyAssignmentOperators();
       chain.applyCommaOperator();
+
+      if (TraceExpressions)
+        console.log(chain.at(0));
     }
 
     if (chain.length === 1)
