@@ -328,8 +328,9 @@
         callback(key, "b", null, value, callbackArg);
         break;
 
-      default:
-        throw new Error("Unhandled value type " + typeof (value));
+      default: {
+        throw new Error("Unhandled value type " + typeof (value) + " for key " + key);
+      }
     }      
   };
 

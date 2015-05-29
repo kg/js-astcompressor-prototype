@@ -45,11 +45,29 @@
     "Comma": {
       "expressions": ["Expression"]
     },
+    "LabelStatement": {
+      "labels": ["String"],
+      "block": "Block"
+    },
     "ForStatement": {
       "initialize": "Expression?",
       "update": "Expression?",
       "terminate": "Expression?",
       "body": "Statement"
+    },
+    "WhileStatement": {
+      "condition": "Expression",
+      "body": "Statement"
+    },
+    "DoWhileStatement": {
+      "condition": "Expression",
+      "body": "Statement"
+    },
+    "TryStatement": {
+      "body": "Block",
+      "catchExpression": "Expression?",
+      "catchBlock": "Block?",
+      "finallyBlock": "Block?"
     },
     "ForInDeclaration": {
       "variableName": "String",

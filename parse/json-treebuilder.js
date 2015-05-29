@@ -156,9 +156,10 @@
     return result;
   };
 
-  JsonTreeBuilder.prototype.makeTryStatement = function (body, catchBlock, finallyBlock) {
+  JsonTreeBuilder.prototype.makeTryStatement = function (body, catchExpression, catchBlock, finallyBlock) {
     var result = this.make("TryStatement");
     result.body = body;
+    result.catchExpression = catchExpression;
     result.catchBlock = catchBlock;
     result.finallyBlock = finallyBlock;
     return result;

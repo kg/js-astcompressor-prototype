@@ -256,8 +256,12 @@
     this.expectToken("separator", "(");
 
     var cond = this.parseExpression("subexpression");
+    if (!cond)
+      return this.abort("Expected expression inside if ()");
 
     var trueStatement = this.parseBlockOrStatement(), falseStatement = null;
+    if (!trueStatement)
+      return this.abort("Expected statement/block after if statement");
 
     var maybeElse = this.readToken();
     if (
@@ -275,7 +279,7 @@
   Parser.prototype.parseTryStatement = function () {
     this.expectToken("separator", "{");
 
-    var body = this.builder.makeBlock(), catchBlock = null, finallyBlock = null;
+    var body = this.builder.makeBlock(), catchBlock = null, finallyBlock = null, catchExpr = null;
     this.parseBlockInterior(body);
 
     var maybeCatchOrFinally;
@@ -286,7 +290,9 @@
             return this.abort("Try block already has a catch block");
 
           this.expectToken("separator", "(");
-          var catchExpr = this.parseExpression("subexpression");
+          catchExpr = this.parseExpression("subexpression");
+          if (!catchExpr)
+            return this.abort("Expected expression inside (catch)");
 
           this.expectToken("separator", "{");
           catchBlock = this.builder.makeBlock();
@@ -310,7 +316,7 @@
       }
     }
 
-    return this.builder.makeTryStatement(body, catchBlock, finallyBlock);
+    return this.builder.makeTryStatement(body, catchExpr, catchBlock, finallyBlock);
   };
 
   Parser.prototype.parseForStatement = function () {
@@ -319,6 +325,8 @@
     this._forInStack.push(false);
 
     var init = this.parseExpression("for-expression");
+    if (!init)
+      init = null;
 
     var wasForIn = this._forInStack.pop();
 
@@ -332,7 +340,12 @@
     } else {
       // for (a;b;c) { ... }
       var update = this.parseExpression("for-expression");
+      if (!update)
+        update = null;
+
       var terminate = this.parseExpression("for-expression");
+      if (!terminate)
+        terminate = null;
 
       var body = this.parseBlockOrStatement();
 
@@ -346,6 +359,8 @@
     this.expectToken("separator", "(");
 
     var condition = this.parseExpression("subexpression");
+    if (!condition)
+      return this.abort("Expected expression inside while ()");
 
     var body = this.parseBlockOrStatement();
 
@@ -361,6 +376,8 @@
     this.expectToken("separator", "(");
 
     var condition = this.parseExpression("subexpression");
+    if (!condition)
+      return this.abort("Expected expression inside do {} while ()");
 
     this.readOptionalSemicolon();
 
@@ -371,6 +388,8 @@
     this.expectToken("separator", "(");
 
     var value = this.parseExpression("subexpression");
+    if (!value)
+      return this.abort("Expected expression inside switch ()");
 
     this.expectToken("separator", "{");
 
@@ -434,13 +453,16 @@
           if (token.value === "=") {
             // Initializer
             var initializer = this.parseExpression("declaration", aborter);
-            declarations.push([variableName, initializer]);
+            if (!initializer)
+              return this.abort("Expected expression after = in variable declaration");
+
+            declarations.push(this.builder.makeDeclaration(variableName, initializer));
 
             if (abort)
               break;
           } else if (token.value === ",") {
             // No initializer
-            declarations.push([variableName]);
+            declarations.push(this.builder.makeDeclaration(variableName, null));
           } else if (token.value === "in") {
             // FIXME: Reject this outside any non-for-loop context
             if (declarations.length !== 0) {
@@ -484,6 +506,8 @@
 
   Parser.prototype.parseForInDeclaration = function (variableName) {
     var sequenceExpression = this.parseExpression("for-expression");
+    if (!sequenceExpression)
+      return this.abort("Expected expression after 'in'");
 
     if (this._forInStack.length)
       this._forInStack[this._forInStack.length - 1] = true;
@@ -634,7 +658,7 @@
     var label = null;
 
     if (maybeLabel.type === "identifier") {
-      label = maybeLabel.token;
+      label = maybeLabel.value;
       maybeLabel = this.readToken();
 
       // We got a label, so read another token to eat a trailing semi if necessary.
@@ -704,6 +728,8 @@
 
       var key = token.value;
       var value = this.parseExpression("object-literal", aborter);
+      if (!value)
+        return this.abort("Expected expression after key '" + key + "' within object literal");
 
       pairs.push(this.builder.makePair(key, value));
       if (abort)
@@ -879,6 +905,8 @@
               } else {
                 // Subexpression
                 lhs = this.parseExpression("subexpression");
+                if (!lhs)
+                  lhs = null;
               }
 
               break;
@@ -899,6 +927,9 @@
                 // Subscripting
                 // High-precedence so we can do it here
                 var index = this.parseExpression("subscript");
+                if (!index)
+                  return this.abort("Expected expression within []");
+
                 lhs = this.builder.makeComputedMemberAccessExpression(lhs, index);
               } else {
                 // Array literal

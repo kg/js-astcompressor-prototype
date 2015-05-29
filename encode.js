@@ -73,5 +73,11 @@ console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);
 
-if (expectedOutputJsFile)
-  fs.writeFileSync(expectedOutputJsFile, escodegen.generate(inputAst));
+if (expectedOutputJsFile) {
+  try {
+    fs.writeFileSync(expectedOutputJsFile, escodegen.generate(inputAst));
+  } finally {
+    // HACK: escodegen is no good but i'm too lazy to replace it
+    process.exit(0);
+  }
+}
