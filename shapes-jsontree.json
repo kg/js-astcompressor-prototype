@@ -16,6 +16,12 @@
     "Identifier": {
       "identifier": "String"
     },
+    "RegExpLiteral": {
+      "value": "RegExp"
+    },
+    "BooleanLiteral": {
+      "value": "Boolean"
+    },
     "StringLiteral": {
       "value": "String"
     },

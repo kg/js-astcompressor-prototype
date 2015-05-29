@@ -618,6 +618,12 @@
       case "try":
         return [true, this.parseTryStatement()];
 
+      case "true":
+        return [false, this.builder.makeLiteralExpression("boolean", true)];
+
+      case "false":
+        return [false, this.builder.makeLiteralExpression("boolean", false)];
+        
       case "case":
       case "default":
         // HACK: 'case' and 'default' detected in a statement/expression

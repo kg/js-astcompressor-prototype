@@ -22,7 +22,8 @@
     "delete import try " +
     "enum await " +
     "implements package protected " +
-    "interface private public";
+    "interface private public " +
+    "true false";
 
   var KeywordLookup = Object.create(null);
   Keywords.split(" ").forEach(function (kw) { KeywordLookup[kw] = true; });

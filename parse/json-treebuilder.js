@@ -186,6 +186,9 @@
 
   JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
     var titleCaseType = type[0].toUpperCase() + type.substr(1);
+    if (type === "regexp")
+      titleCaseType = "RegExp";
+
     var result = this.make(titleCaseType + "Literal");
     result.value = value;
     return result;
