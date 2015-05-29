@@ -48,8 +48,15 @@ console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);
 console.timeEnd("asm-parse");
 
-if (outputAstFile)
-  fs.writeFileSync(outputAstFile, JSON.stringify(inputAst));
+if (outputAstFile) {
+  var json;
+  if (astEncoder.PrettyJson)
+    json = JSON.stringify(inputAst, null, 2)
+  else
+    json = JSON.stringify(inputAst);
+
+  fs.writeFileSync(outputAstFile, json);
+}
 
 console.time("astToModule");
 var outputModule = astEncoder.astToModule(inputAst, shapes);
@@ -73,11 +80,6 @@ console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);
 
-if (expectedOutputJsFile) {
-  try {
-    fs.writeFileSync(expectedOutputJsFile, escodegen.generate(inputAst));
-  } finally {
-    // HACK: escodegen is no good but i'm too lazy to replace it
-    process.exit(0);
-  }
+if (false && expectedOutputJsFile) {
+  fs.writeFileSync(expectedOutputJsFile, escodegen.generate(inputAst));
 }

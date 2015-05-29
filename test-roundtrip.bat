@@ -20,6 +20,7 @@ node --expose-gc -e "var json = require('fs').readFileSync('Test/%FILE_PREFIX%.a
 echo // decoding
 node --expose-gc decode.js Test\%FILE_PREFIX%.webasm Test\%FILE_PREFIX%.decoded.js Test\%FILE_PREFIX%.ast.decoded.json || (goto end)
 echo // diffing
-fc /A /N /L Test\%FILE_PREFIX%.expected.js Test\%FILE_PREFIX%.decoded.js
+rem fc /A /N /L Test\%FILE_PREFIX%.expected.js Test\%FILE_PREFIX%.decoded.js
+rem fc /A /N /L Test\%FILE_PREFIX%.ast.json Test\%FILE_PREFIX%.ast.decoded.json
 
 :end

@@ -471,9 +471,9 @@
     "array"
   ];
 
-  exports.FormatName = "estree-compressed-v3";
+  exports.FormatName    = "asmparse-jsontreebuilder-compressed-v1";
   exports.EnableVarints = true;
-
+  exports.PrettyJson    = false;
 
   exports.ShapeDefinition = ShapeDefinition;
 

@@ -612,9 +612,11 @@
   };
 
 
-  exports.ShapeTable = common.ShapeTable;
+  exports.PrettyJson      = common.PrettyJson;
 
-  exports.astToModule = astToModule;
+  exports.ShapeTable      = common.ShapeTable;
+
+  exports.astToModule     = astToModule;
   exports.serializeModule = serializeModule;
-  exports.esprimaCleanup = esprimaCleanup;
+  exports.esprimaCleanup  = esprimaCleanup;
 }));

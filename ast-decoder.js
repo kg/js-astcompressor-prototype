@@ -414,8 +414,11 @@
     return module.objects[module.rootIndex];
   };
 
+  exports.PrettyJson    = common.PrettyJson;
+
   exports.ShapeTable    = common.ShapeTable;
   exports.ValueReader   = ValueReader;
+  
   exports.bytesToModule = bytesToModule;
   exports.moduleToAst   = moduleToAst;
 }));

@@ -45,11 +45,20 @@ console.timeEnd("moduleToAst");
 
 console.log("heapUsed " + process.memoryUsage().heapUsed);
 
-if (outputAstFile)
-  fs.writeFileSync(outputAstFile, JSON.stringify(outputAst));
+if (outputAstFile) {
+  var json;
+  if (astDecoder.PrettyJson)
+    json = JSON.stringify(outputAst, null, 2)
+  else
+    json = JSON.stringify(outputAst);
 
-console.time("escodegen generate");
-var outputJs = escodegen.generate(outputAst);
-console.timeEnd("escodegen generate");
+  fs.writeFileSync(outputAstFile, json);
+}
 
-fs.writeFileSync(outputFile, outputJs);
+if (false) {
+    console.time("escodegen generate");
+    var outputJs = escodegen.generate(outputAst);
+    console.timeEnd("escodegen generate");
+
+    fs.writeFileSync(outputFile, outputJs);
+}
