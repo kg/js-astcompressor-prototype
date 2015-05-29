@@ -26,7 +26,7 @@
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
   var TraceExpressions        = false;
-  var TraceStatements         = true;
+  var TraceStatements         = false;
   var TraceFullStatements     = false;
 
 
@@ -326,6 +326,8 @@
       // for (a in b) { ... }
       var body = this.parseBlockOrStatement();
 
+      this.readOptionalSemicolon();
+
       return this.builder.makeForInStatement(init, body);
     } else {
       // for (a;b;c) { ... }
@@ -333,6 +335,8 @@
       var terminate = this.parseExpression("for-expression");
 
       var body = this.parseBlockOrStatement();
+
+      this.readOptionalSemicolon();
 
       return this.builder.makeForStatement(init, update, terminate, body);
     }
@@ -345,6 +349,8 @@
 
     var body = this.parseBlockOrStatement();
 
+    this.readOptionalSemicolon();
+
     return this.builder.makeWhileStatement(condition, body);
   };
 
@@ -355,6 +361,8 @@
     this.expectToken("separator", "(");
 
     var condition = this.parseExpression("subexpression");
+
+    this.readOptionalSemicolon();
 
     return this.builder.makeDoWhileStatement(condition, body);
   };
@@ -402,6 +410,8 @@
     }
 
     this._switchStack.pop();
+
+    this.readOptionalSemicolon();
 
     return this.builder.makeSwitchStatement(value, cases);
   };
@@ -606,6 +616,16 @@
         return false;
     }
   };
+
+  Parser.prototype.readOptionalSemicolon = function () {
+    var token = this.readToken();
+
+    if (
+      (token.type !== "separator") ||
+      (token.value !== ";")
+    )
+      this.rewind(token);
+  }
 
   // HACK: break and continue statements have special ASI properties
   //  so we need to be picky about how we parse them.
