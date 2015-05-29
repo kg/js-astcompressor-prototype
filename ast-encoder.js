@@ -442,6 +442,15 @@
           serializeValue(writer, true, serializationValue);
           break;
 
+        case "Double":
+          writer.writeFloat64(value);
+          break;
+
+        case "Integer":
+          // TODO: varint?
+          writer.writeInt32(value);
+          break;
+
         case "Object":
         default:
           if (

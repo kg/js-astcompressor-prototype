@@ -16,9 +16,14 @@
     "Identifier": {
       "identifier": "String"
     },
-    "ValueLiteral": {
-      "valueType": "String",
-      "value": "Any"
+    "StringLiteral": {
+      "value": "String"
+    },
+    "IntegerLiteral": {
+      "value": "Integer"
+    },
+    "DoubleLiteral": {
+      "value": "Double"
     },
     "ObjectLiteral": {
       "pairs": ["Pair"]

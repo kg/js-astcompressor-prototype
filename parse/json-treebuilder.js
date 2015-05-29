@@ -185,8 +185,8 @@
   };
 
   JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
-    var result = this.make("ValueLiteral");
-    result.valueType = type;
+    var titleCaseType = type[0].toUpperCase() + type.substr(1);
+    var result = this.make(titleCaseType + "Literal");
     result.value = value;
     return result;
   };

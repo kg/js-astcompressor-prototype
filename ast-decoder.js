@@ -241,6 +241,15 @@
           value = Boolean(reader.readByte());
           break;
 
+        case "Double":
+          value = reader.readFloat64();
+          break;
+
+        case "Integer":
+          // TODO: varint?
+          value = reader.readInt32();
+          break;
+
         case "String":
           index = reader.readIndex();
           if (index === 0xFFFFFFFF)
@@ -418,7 +427,7 @@
 
   exports.ShapeTable    = common.ShapeTable;
   exports.ValueReader   = ValueReader;
-  
+
   exports.bytesToModule = bytesToModule;
   exports.moduleToAst   = moduleToAst;
 }));
