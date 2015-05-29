@@ -1133,7 +1133,9 @@
       return stmt;
     } else {
       this.rewind(token);
-      return this.parseStatement(aborter);
+      var stmt = this.parseStatement(aborter);
+
+      return stmt;
     }
   }
 
@@ -1175,10 +1177,7 @@
               return false;
 
             case ";":
-              // HACK: Just skip stray semicolons. We don't care about
-              //  no-op statements, and this lets us avoid conditionally
-              //  eating a trailing ;.
-              break iter;
+              return this.builder.makeNullStatement();
 
             default:
               // Fall-through

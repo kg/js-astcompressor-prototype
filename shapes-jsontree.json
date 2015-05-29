@@ -1,6 +1,10 @@
 {
   "shapeKey": "type",
   "shapes": {
+    "RegExp": {
+      "pattern": "String",
+      "flags": "String"
+    },
     "MemberAccess": {
       "lhs": "Expression",
       "memberName": "String"
@@ -29,6 +33,8 @@
     "UnaryOperator": {
       "operator": "String",
       "rhs": "Expression"
+    },
+    "NullStatement": {
     },
     "BreakStatement": {
       "label": "String?"

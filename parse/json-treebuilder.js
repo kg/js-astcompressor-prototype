@@ -92,6 +92,11 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeNullStatement = function () {
+    var result = this.make("NullStatement");
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeFunctionStatement = function (functionExpression) {
     var result = this.make("FunctionStatement");
     result.functionExpression = functionExpression;
