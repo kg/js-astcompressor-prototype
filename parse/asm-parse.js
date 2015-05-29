@@ -20,9 +20,9 @@
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
-  var TraceTokenization       = true;
+  var TraceTokenization       = false;
   var TraceTokensLightweight  = false;
-  var TraceParsingStack       = true;
+  var TraceParsingStack       = false;
   var TraceRewind             = false;
   var TraceOperatorPrecedence = false;
   var TraceExpressions        = false;
@@ -406,7 +406,7 @@
       var body = this.builder.makeBlock();
       this.parseBlockInterior(body);
 
-      cases.push(caseKey, body);
+      cases.push(this.builder.makeSwitchCase(caseKey, body));
     }
 
     this._switchStack.pop();
@@ -705,7 +705,7 @@
       var key = token.value;
       var value = this.parseExpression("object-literal", aborter);
 
-      pairs.push([key, value]);
+      pairs.push(this.builder.makePair(key, value));
       if (abort)
         break;
     }

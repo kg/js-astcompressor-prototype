@@ -21,7 +21,7 @@ var outputAstFile = process.argv[4];
 var expectedOutputJsFile = process.argv[5];
 
 var shapes = astEncoder.ShapeTable.fromJson(
-  fs.readFileSync("shapes-esprima.json", { encoding: "utf8" })
+  fs.readFileSync("shapes-jsontree.json", { encoding: "utf8" })
 );
 
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
@@ -41,32 +41,18 @@ if (false) {
   process.exit(1);
 }
 
-if (true) {
-  console.time("asm-parse");
-  var inputReader = encoding.makeCharacterReader(inputJs);
-  var astBuilder = new asmParse.JsonTreeBuilder();
-  var inputAst = asmParse.parse(inputReader, astBuilder);
-  console.timeEnd("asm-parse");
+var inputReader = encoding.makeCharacterReader(inputJs);
+var astBuilder = new asmParse.JsonTreeBuilder();
 
-  if (outputAstFile)
-    fs.writeFileSync(outputAstFile, JSON.stringify(inputAst));
-
-  process.exit(1);
-}
-
-console.time("esprima parse");
-var inputAst = esprima.parse(inputJs);
-console.timeEnd("esprima parse");
-
-console.time("esprima ast cleanup");
-var cleanAst = astEncoder.esprimaCleanup(inputAst);
-console.timeEnd("esprima ast cleanup");
+console.time("asm-parse");
+var inputAst = asmParse.parse(inputReader, astBuilder);
+console.timeEnd("asm-parse");
 
 if (outputAstFile)
-  fs.writeFileSync(outputAstFile, JSON.stringify(cleanAst));
+  fs.writeFileSync(outputAstFile, JSON.stringify(inputAst));
 
 console.time("astToModule");
-var outputModule = astEncoder.astToModule(cleanAst, shapes);
+var outputModule = astEncoder.astToModule(inputAst, shapes);
 console.timeEnd("astToModule");
 
 if (true) {

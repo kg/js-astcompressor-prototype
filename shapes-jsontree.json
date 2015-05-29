@@ -1,0 +1,124 @@
+{
+  "shapeKey": "type",
+  "shapes": {
+    "MemberAccess": {
+      "lhs": "Expression",
+      "memberName": "String"
+    },
+    "ComputedMemberAccess": {
+      "lhs": "Expression",
+      "rhs": "Expression"
+    },
+    "Identifier": {
+      "identifier": "String"
+    },
+    "ValueLiteral": {
+      "valueType": "String",
+      "value": "Any"
+    },
+    "ObjectLiteral": {
+      "pairs": ["Pair"]
+    },
+    "ArrayLiteral": {
+      "values": ["Expression"]
+    },
+    "Pair": {
+      "key": "Any",
+      "value": "Any"
+    },
+    "UnaryOperator": {
+      "operator": "String",
+      "rhs": "Expression"
+    },
+    "BreakStatement": {
+      "label": "String?"
+    },
+    "ContinueStatement": {
+      "label": "String?"
+    },
+    "ReturnStatement": {
+      "expression": "Expression?"
+    },
+    "ThrowStatement": {
+      "expression": "Expression?"
+    },
+    "Comma": {
+      "expressions": ["Expression"]
+    },
+    "ForStatement": {
+      "initialize": "Expression?",
+      "update": "Expression?",
+      "terminate": "Expression?",
+      "body": "Statement"
+    },
+    "ForInDeclaration": {
+      "variableName": "String",
+      "sequenceExpression": "Expression"
+    },
+    "ForInStatement": {
+      "declaration": "ForInDeclaration",
+      "body": "Statement"
+    },
+    "SwitchStatement": {
+      "value": "Expression",
+      "cases": ["SwitchCase"]
+    },
+    "SwitchCase": {
+      "value": "Expression?",
+      "body": "Block?"
+    },
+    "PostfixMutation": {
+      "operator": "String",
+      "lhs": "Expression"
+    },
+    "PrefixMutation": {
+      "operator": "String",
+      "rhs": "Expression"
+    },
+    "BinaryOperator": {
+      "operator": "String",
+      "lhs": "Expression",
+      "rhs": "Expression"
+    },
+    "AssignmentOperator": {
+      "operator": "String",
+      "lhs": "Expression",
+      "rhs": "Expression"
+    },
+    "TernaryOperator": {
+      "condition": "Expression",
+      "trueExpression": "Expression",
+      "falseExpression": "Expression"
+    },
+    "DeclarationStatement": {
+      "declarations": ["Declaration"]
+    },
+    "Declaration": {
+      "name": "String",
+      "initialValue": "Expression?"
+    },
+    "Invocation": {
+      "callee": "Expression",
+      "argumentValues": ["Expression"]
+    },
+    "Block": {
+      "statements": ["Statement"]
+    },
+    "IfStatement": {
+      "condition": "Expression",
+      "trueStatement": "Statement",
+      "falseStatement": "Statement?"
+    },
+    "BlockStatement": {
+      "block": "Block"
+    },
+    "Function": {
+      "name": "String?",
+      "argumentNames": ["String"],
+      "body": "Block"
+    },
+    "TopLevel": {
+      "statements": ["Statement"]
+    }
+  }
+}

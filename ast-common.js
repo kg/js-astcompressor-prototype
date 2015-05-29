@@ -386,7 +386,15 @@
       var fields = parsed.shapes[k];
 
       for (var j in fields) {
-        var fd = new FieldDefinition(j, fields[j]);
+        var fieldType = fields[j];
+
+        var isOptional = false;
+        if (!Array.isArray(fieldType)) {
+          isOptional = (fieldType.indexOf("?") >= 0);
+          fieldType = fieldType.replace("?", "");
+        }
+
+        var fd = new FieldDefinition(j, fieldType, isOptional);
         definition.fields.push(fd);
       }
 
@@ -399,9 +407,10 @@
   ShapeTable.prototype = Object.create(NamedTable.prototype);
 
 
-  function FieldDefinition (name, type) {
+  function FieldDefinition (name, type, optional) {
     this.name = name;
     this.type = type;
+    this.optional = optional;
   };
 
 

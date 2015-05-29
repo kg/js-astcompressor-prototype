@@ -27,7 +27,7 @@ else
 console.timeEnd("read webasm");
 
 var shapes = astDecoder.ShapeTable.fromJson(
-  fs.readFileSync("shapes-esprima.json", { encoding: "utf8" })
+  fs.readFileSync("shapes-jsontree.json", { encoding: "utf8" })
 );
 
 console.time("bytesToModule");

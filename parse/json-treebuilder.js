@@ -16,7 +16,7 @@
   JsonTreeBuilder.prototype.make = function (type) {
     var proto = this.protos[type];
     if (!proto) {
-      this.protos[type] = proto = Object.create(null);
+      this.protos[type] = proto = new Object();
       proto.type = type;
     }
 
@@ -104,6 +104,13 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeDeclaration = function (name, initialValue) {
+    var result = this.make("Declaration");
+    result.name = name;
+    result.initialValue = initialValue || null;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeForInDeclaration = function (variableName, sequenceExpression) {
     var result = this.make("ForInDeclaration");
     result.variableName = variableName;
@@ -142,6 +149,13 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.makeSwitchCase = function (value, body) {
+    var result = this.make("SwitchCase");
+    result.value = value;
+    result.body = body;
+    return result;
+  };
+
   JsonTreeBuilder.prototype.makeTryStatement = function (body, catchBlock, finallyBlock) {
     var result = this.make("TryStatement");
     result.body = body;
@@ -165,7 +179,7 @@
   };
 
   JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
-    var result = this.make("Literal");
+    var result = this.make("ValueLiteral");
     result.valueType = type;
     result.value = value;
     return result;
@@ -180,6 +194,13 @@
   JsonTreeBuilder.prototype.makeObjectLiteralExpression = function (pairs) {
     var result = this.make("ObjectLiteral");
     result.pairs = pairs;
+    return result;
+  };
+
+  JsonTreeBuilder.prototype.makePair = function (key, value) {
+    var result = this.make("Pair");
+    result.key = key;
+    result.value = value;
     return result;
   };
 
