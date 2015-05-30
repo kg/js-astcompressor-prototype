@@ -340,8 +340,10 @@
 
   function StringTable (semantic) {
     UniqueTable.call(this, function (s) {
-      // Fixme: This means we can put numbers in here...
-      return String(s);
+      if (typeof (s) !== "string")
+        throw new Error("StringTable entries must be strings");
+      else
+        return s;
     }, semantic);
   };
 

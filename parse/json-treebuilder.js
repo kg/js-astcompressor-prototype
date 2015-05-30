@@ -35,23 +35,27 @@
     return this._makeBlock("Block");
   };
 
+  JsonTreeBuilder.prototype.finalize = function (obj) {
+    return obj;
+  };
+
   JsonTreeBuilder.prototype.makeExpressionStatement = function (expression) {
     var result = this.make("Statement");
     result.expression = expression;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeBlockStatement = function (block) {
     var result = this.make("BlockStatement");
     result.block = block;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeLabelStatement = function (labels, block) {
     var result = this.make("LabelStatement");
     result.labels = labels;
     result.block = block;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeIfStatement = function (condition, trueStatement, falseStatement) {
@@ -59,7 +63,7 @@
     result.condition = condition;
     result.trueStatement = trueStatement;
     result.falseStatement = falseStatement;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeForStatement = function (initialize, update, condition, body) {
@@ -68,97 +72,97 @@
     result.update = update;
     result.condition = condition;
     result.body = body;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeForInStatement = function (declaration, body) {
     var result = this.make("ForInStatement");
     result.declaration = declaration;
     result.body = body;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeWhileStatement = function (condition, body) {
     var result = this.make("WhileStatement");
     result.condition = condition;
     result.body = body;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeDoWhileStatement = function (condition, body) {
     var result = this.make("DoWhileStatement");
     result.condition = condition;
     result.body = body;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeNullStatement = function () {
     var result = this.make("NullStatement");
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeFunctionStatement = function (functionExpression) {
     var result = this.make("FunctionStatement");
     result.functionExpression = functionExpression;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeDeclarationStatement = function (declarations) {
     var result = this.make("DeclarationStatement");
     result.declarations = declarations;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeDeclaration = function (name, initialValue) {
     var result = this.make("Declaration");
     result.name = name;
     result.initialValue = initialValue || null;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeForInDeclaration = function (variableName, sequenceExpression) {
     var result = this.make("ForInDeclaration");
     result.variableName = variableName;
     result.sequenceExpression = sequenceExpression;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeReturnStatement = function (expression) {
     var result = this.make("ReturnStatement");
     result.expression = expression;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeBreakStatement = function (label) {
     var result = this.make("BreakStatement");
     result.label = label;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeContinueStatement = function (label) {
     var result = this.make("ContinueStatement");
     result.label = label;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeThrowStatement = function (expression) {
     var result = this.make("ThrowStatement");
     result.expression = expression;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeSwitchStatement = function (value, cases) {
     var result = this.make("SwitchStatement");
     result.value = value;
     result.cases = cases;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeSwitchCase = function (value, body) {
     var result = this.make("SwitchCase");
     result.value = value;
     result.body = body;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeTryStatement = function (body, catchExpression, catchBlock, finallyBlock) {
@@ -167,13 +171,13 @@
     result.catchExpression = catchExpression;
     result.catchBlock = catchBlock;
     result.finallyBlock = finallyBlock;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeCommaExpression = function (expressions) {
     var result = this.make("Comma");
     result.expressions = expressions;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
@@ -181,7 +185,7 @@
     result.name = name;
     result.argumentNames = argumentNames;
     result.body = body;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
@@ -191,53 +195,53 @@
 
     var result = this.make(titleCaseType + "Literal");
     result.value = value;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeArrayLiteralExpression = function (elements) {
     var result = this.make("ArrayLiteral");
     result.elements = elements;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeObjectLiteralExpression = function (pairs) {
     var result = this.make("ObjectLiteral");
     result.pairs = pairs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makePair = function (key, value) {
     var result = this.make("Pair");
     result.key = key;
     result.value = value;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeIdentifierExpression = function (identifier) {
     var result = this.make("Identifier");
     result.identifier = identifier;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makePrefixMutationExpression = function (operator, rhs) {
     var result = this.make("PrefixMutation");
     result.operator = operator;
     result.rhs = rhs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makePostfixMutationExpression = function (operator, lhs) {
     var result = this.make("PostfixMutation");
     result.operator = operator;
     result.lhs = lhs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeUnaryOperatorExpression = function (operator, rhs) {
     var result = this.make("UnaryOperator");
     result.operator = operator;
     result.rhs = rhs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeBinaryOperatorExpression = function (operator, lhs, rhs) {
@@ -245,7 +249,7 @@
     result.operator = operator;
     result.lhs = lhs;
     result.rhs = rhs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeAssignmentOperatorExpression = function (operator, lhs, rhs) {
@@ -253,14 +257,14 @@
     result.operator = operator;
     result.lhs = lhs;
     result.rhs = rhs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeComputedMemberAccessExpression = function (lhs, rhs) {
     var result = this.make("ComputedMemberAccess");
     result.lhs = lhs;
     result.rhs = rhs;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeTernaryOperatorExpression = function (condition, trueExpression, falseExpression) {
@@ -268,28 +272,28 @@
     result.condition = condition;
     result.trueExpression = trueExpression;
     result.falseExpression = falseExpression;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeMemberAccessExpression = function (lhs, memberName) {
     var result = this.make("MemberAccess");
     result.lhs = lhs;
     result.memberName = memberName;
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeInvocationExpression = function (callee, argumentValues) {
     var result = this.make("Invocation");
     result.callee = callee;
     result.argumentValues = argumentValues;
-    return result;
+    return this.finalize(result);
   };
 
 
   JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
     var result = this.make(typeTag);
     result.statements = [];
-    return result;
+    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.appendToBlock = function (block, statement) {
