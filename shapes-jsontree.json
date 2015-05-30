@@ -39,13 +39,16 @@
     },
     "Pair": {
       "key": "Any",
-      "value": "Any"
+      "value": "Expression"
     },
     "UnaryOperator": {
       "operator": "String",
       "rhs": "Expression"
     },
     "NullStatement": {
+    },
+    "ExpressionStatement": {
+      "expression": "Expression"
     },
     "BreakStatement": {
       "label": "String?"
@@ -154,6 +157,18 @@
     },
     "TopLevel": {
       "statements": ["Statement"]
+    },
+
+    "SignedTruncation": {
+      "expression": "Expression"
+    },
+    "UnsignedTruncation": {
+      "expression": "Expression"
+    },
+    "ToDouble": {
+      "expression": "Expression"
+    },
+    "UseAsmStatement": {
     }
   }
 }

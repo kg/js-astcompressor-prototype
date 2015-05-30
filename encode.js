@@ -42,7 +42,7 @@ if (false) {
 }
 
 var inputReader = encoding.makeCharacterReader(inputJs);
-var astBuilder = new asmParse.JsonTreeBuilder();
+var astBuilder = new asmParse.TreeBuilder.AsmlikeJSON();
 
 console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);

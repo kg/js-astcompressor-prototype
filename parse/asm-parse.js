@@ -13,10 +13,9 @@
 }(this, function (exports) {
   var tokenizer       = require("./asm-tokenizer.js");
   var expressionChain = require("./asm-expressionchain.js");
-  var treeBuilder     = require("./json-treebuilder.js");
+  var treeBuilder     = require("./treebuilder.js");
 
   var Tokenizer       = tokenizer.Tokenizer;
-  var JsonTreeBuilder = treeBuilder.JSON;
   var ExpressionChain = expressionChain.ExpressionChain;
 
 
@@ -1115,9 +1114,17 @@
         console.log(chain.at(0));
     }
 
-    if (chain.length === 1)
-      return chain.at(0);
-    else {
+    if (chain.length === 1) {
+      var expr = chain.at(0);
+
+      if (context === "statement") {
+        if (expr !== false)
+          return this.builder.makeExpressionStatement(expr);
+        else
+          return false;
+      } else
+        return expr;
+    } else {
       console.log("chain", chain.items);
       return this.abort("Left with more than one result after expression resolution");
     }
@@ -1148,7 +1155,7 @@
   // parses a single statement, returns false if it hit a block-closing token.
   // handles nested blocks.
   Parser.prototype.parseStatement = function (aborter) {
-    var token = null, stmt = null, expr = null;
+    var token = null, stmt = null;
 
     iter:
     while (token = this.readToken()) {
@@ -1156,8 +1163,15 @@
         case "keyword":
           var kwOrExpr = this.parseKeyword(token.value, aborter);
           if (kwOrExpr !== false) {
-            expr = kwOrExpr[1];
-            break iter;
+            var isStatement = kwOrExpr[0];
+            
+            if (isStatement)
+              return kwOrExpr[1];
+            else if (kwOrExpr[1] !== false)
+              return this.builder.makeExpressionStatement(kwOrExpr[1]);
+            else
+              return false;
+
           } else {
             break;
           }
@@ -1191,7 +1205,7 @@
 
         default:
           this.rewind(token);
-          expr = this.parseExpression("statement");
+          stmt = this.parseExpression("statement");
           break iter;
 
       }
@@ -1200,18 +1214,8 @@
     if (token === false)
       aborter(false);
 
-    if (expr) {
-      if (expr.type.indexOf("Statement"))
-        // HACK: If parsing produced a statement instead of an expression,
-        //  just use it
-        return expr;
-      else if (expr.type === "Function")
-        // HACK: If parsing produced a free-standing function expression,
-        //  convert it to a function statement
-        return this.builder.makeFunctionStatement(expr);
-      else
-        return this.builder.makeExpressionStatement(expr);
-    }
+    if (stmt)
+      return stmt;
 
     return false;
   };
@@ -1234,9 +1238,9 @@
   };
 
 
-  exports.JsonTreeBuilder = JsonTreeBuilder;
-  exports.Tokenizer       = Tokenizer;
-  exports.Parser          = Parser;
+  exports.TreeBuilder = treeBuilder;
+  exports.Tokenizer   = Tokenizer;
+  exports.Parser      = Parser;
 
 
   exports.parse = parse;

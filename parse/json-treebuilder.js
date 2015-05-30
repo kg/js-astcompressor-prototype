@@ -6,7 +6,7 @@
   } else if (typeof exports !== 'undefined') {
     factory(exports);
   } else {
-    factory((root.treeBuilder = {}));
+    factory((root.jsonTreeBuilder = {}));
   }
 }(this, function (exports) {
   function JsonTreeBuilder () {
@@ -40,7 +40,18 @@
   };
 
   JsonTreeBuilder.prototype.makeExpressionStatement = function (expression) {
-    var result = this.make("Statement");
+    var result = this.make("ExpressionStatement");
+    if (
+      !expression || 
+      (typeof (expression.type) !== "string")
+    ) {
+      console.log(expression);
+      throw new Error("Expected an expression");
+    } else if (expression.type.indexOf("Statement") >= 0) {
+      console.log(expression);
+      throw new Error("Cannot wrap a statement in an expression statement");
+    }
+
     result.expression = expression;
     return this.finalize(result);
   };
@@ -301,5 +312,5 @@
   };
 
 
-  exports.JSON = JsonTreeBuilder;
+  exports.Builder = JsonTreeBuilder;
 }));
