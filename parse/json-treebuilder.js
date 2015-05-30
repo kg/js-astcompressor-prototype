@@ -27,7 +27,7 @@
     }
 
     var result = Object.create(proto);
-    // HACK For debugging
+    // HACK For debugging and JSON.stringify
     result.type = type;
     
     return result;

@@ -132,13 +132,57 @@
 
 
   function JsAstModule (shapes) {
-    this.strings = new StringTable("String");
-    this.arrays  = new ObjectTable("Array");
-    this.objects = new ObjectTable("Object");
-
     this.shapes  = shapes;
 
+    this.strings = new StringTable("String");
+    this.arrays  = new ObjectTable("Array");
+
+    // Populate the strings table with the names of all our shapes.
+    // This ensures getShapeForObject will always work.
+    var s = this.strings;
+    this.shapes.forEach(function (v) {
+      s.add(v.entry.name);
+    });
+
+    if (common.PartitionedObjectTables) {
+      this.objectTables = Object.create(null);
+      Object.defineProperty(this, "objects", {
+        configurable: false,
+        enumerable: false,
+        get: function () { throw new Error("module.objects not available in partitioned tables mode"); }
+      });
+    } else {
+      this.objects = new ObjectTable("Object");
+    }
+
+    this.root_type = null;
     this.root_id = null;
+  };
+
+  JsAstModule.prototype.getObjectTable = function (nodeOrShape) {
+    if (common.PartitionedObjectTables) {
+      var shape;
+
+      if (nodeOrShape instanceof common.ShapeDefinition) {
+        shape = nodeOrShape;
+      } else {
+        var temp = this.getShapeForObject(nodeOrShape);
+
+        if (!temp)
+          throw new Error("Expected either a ShapeDefinition or a node with a type");
+
+        shape = temp.shape;
+      }
+
+      var table = this.objectTables[shape.name];
+
+      if (!table)
+        table = this.objectTables[shape.name] = new ObjectTable(shape.name);
+
+      return table;
+    } else {
+      return this.objects;
+    }
   };
 
   function test () {
@@ -189,7 +233,7 @@
           result.walkValue(i, node[i], walkCallback);
 
       } else {
-        nodeTable = result.objects;
+        nodeTable = result.getObjectTable(node);
 
         result.walkObject(node, walkCallback);
       }
@@ -197,7 +241,10 @@
       nodeTable.add(node);
     });
 
-    result.root_id = result.objects.get_id(root);
+    var rootTable = result.getObjectTable(root);
+    // HACK
+    result.root_type = root.type;
+    result.root_id   = rootTable.get_id(root);
 
     return result;
   };
@@ -405,26 +452,45 @@
   };
 
 
-  JsAstModule.prototype.serializeObject = function (writer, node) {
-    if (Array.isArray(node))
-      throw new Error("Should have used serializeArray");
-
-    var shapeName = node[this.shapes.shapeKey];
+  JsAstModule.prototype.getShapeForObject = function (obj) {
+    var shapeName = obj[this.shapes.shapeKey];
     if (typeof (shapeName) !== "string") {
       // HACK for esprima nonsense
-      if (Object.getPrototypeOf(node) === RegExp.prototype)
+      if (Object.getPrototypeOf(obj) === RegExp.prototype)
         shapeName = "RegExp";
+      else
+        throw new Error("Unsupported object " + typeof (obj) + " with shape name + " + JSON.stringify(shapeName))
     }
 
     var shape = this.shapes.get(shapeName);
     if (!shape) {
-      console.log(shapeName, node, Object.getPrototypeOf(node), node.toString());
+      console.log(shapeName, obj, Object.getPrototypeOf(obj), obj.toString());
       throw new Error("Unknown shape " + shapeName);
     }
 
-    var shapeNameIndex = this.strings.get_index(shapeName);
+    var shapeNameIndex = null;
+    if (this.strings.isFinalized) {
+      shapeNameIndex = this.strings.get_index(shapeName);
+    }
 
-    writer.writeIndex(shapeNameIndex);
+    return {
+      name: shapeName,
+      shape: shape,
+      nameIndex: shapeNameIndex
+    };
+  };
+
+
+  JsAstModule.prototype.serializeObject = function (writer, node) {
+    if (Array.isArray(node))
+      throw new Error("Should have used serializeArray");
+
+    var shape = this.getShapeForObject(node);
+
+    if (shape.nameIndex === null)
+      throw new Error("Shapes table not finalized");
+    
+    writer.writeIndex(shape.nameIndex);
 
     var walkCallback = function (key, typeToken, table, value, fieldDefinition) {
       // If the type is known, omit the type tag
@@ -476,7 +542,7 @@
       }
     };
 
-    var self = this, fields = shape.fields;
+    var self = this, fields = shape.shape.fields;
     for (var i = 0, l = fields.length; i < l; i++) {
       var fd = fields[i];
       var value = node[fd.name];
@@ -561,6 +627,13 @@
   };
 
 
+  JsAstModule.prototype.finalize = function () {
+    this.strings.finalize(true);
+    this.arrays .finalize(true);
+    this.objects.finalize(true);
+  };
+
+
   // Converts a JsAstModule into bytes and writes them into byteWriter.
   function serializeModule (module, byteWriter, stats) {
     var writer = new ValueWriter();
@@ -572,11 +645,9 @@
     module.serializeTable(writer, module.identifiers, serializeUtf8String);
     */
 
-    module.strings.finalize(true);
+    module.finalize();
 
-    module.arrays .finalize(true);
-    module.objects.finalize(true);
-
+    writer.writeUtf8String(module.root_type);
     writer.writeUint32(module.root_id.get_index());
 
     // We write out the lengths in advance of the (length-prefixed) tables.

@@ -120,7 +120,8 @@
 
     this.shapes  = shapes;
 
-    this.root_id = null;
+    this.rootType = null;
+    this.rootIndex = null;
   };
 
 
@@ -359,6 +360,7 @@
 
     var result = new JsAstModule(shapes);
 
+    result.rootType  = reader.readUtf8String();
     result.rootIndex = reader.readUint32();
 
     // The lengths are stored in front of the tables themselves,

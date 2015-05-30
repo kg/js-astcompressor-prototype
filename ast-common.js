@@ -173,8 +173,9 @@
         return entry.index;
       else
         throw new Error("Table not finalized");
-    } else
-      throw new Error("No table entry for '" + name + "'");
+    } else {
+      throw new Error("No '" + this.semantic + "' table entry for '" + name + "'");
+    }
   }
 
   NamedTable.prototype.get_count = function () {
@@ -473,9 +474,11 @@
     "array"
   ];
 
-  exports.FormatName    = "asmparse-jsontreebuilder-compressed-v1";
-  exports.EnableVarints = true;
-  exports.PrettyJson    = false;
+  exports.FormatName              = "asmparse-jsontreebuilder-compressed-v1";
+  exports.EnableVarints           = true;
+  exports.PartitionedObjectTables = false;
+
+  exports.PrettyJson = false;
 
   exports.ShapeDefinition = ShapeDefinition;
 
