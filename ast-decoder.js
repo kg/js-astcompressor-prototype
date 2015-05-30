@@ -114,11 +114,22 @@
 
 
   function JsAstModule (shapes) {
+    this.shapes  = shapes;
+
     this.strings = null;
     this.arrays  = null;
-    this.objects = null;
 
-    this.shapes  = shapes;
+    if (common.PartitionedObjectTables) {
+      this.objectTables = Object.create(null);
+
+      Object.defineProperty(this, "objects", {
+        configurable: false,
+        enumerable: false,
+        get: function () { throw new Error("module.objects not available in partitioned tables mode"); }
+      });
+    } else {
+      this.objects = null;
+    }
 
     this.rootType = null;
     this.rootIndex = null;
@@ -308,42 +319,48 @@
   };
 
 
-  function deserializeObjects (reader, module) {
+  function deserializeObjectTable (reader, module, type) {
     var count = reader.readUint32();
     if (count === false)
       throw new Error("Truncated file");
 
+    var table;
+    if (common.PartitionedObjectTables) {
+      table = module.objectTables[type];
+      if (!table)
+        throw new Error("Table not found");
+    } else {
+      table = module.objects;
+    }
+
     for (var i = 0; i < count; i++) {
-      var obj = module.objects[i];
-      deserializeObjectContents(reader, module, obj);
+      var obj = table[i];
+      deserializeObjectContents(reader, module, table, obj);
     }
   };
 
 
-  function findCycles (module) {
-    var root = module.objects[module.rootIndex];
+  function allocateObjectTable (module, type, count) {
+    var table = new Array(count);
+    for (var i = 0; i < count; i++) {
+      // TODO: Pre-allocate with known shape for better perf
+      var o = new Object();
 
-    var ctx = new astutil.Context();
-    ctx.onCycleDetected = function (v) {
-      var srcSemantic = ctx.parent.__semantic__;
-      var srcIndex = ctx.parent.__index__;
-      var dstSemantic = v.__semantic__;
-      var dstIndex = v.__index__;
-
-      console.log(
-        "Cycle detected:", srcSemantic, "#" + srcIndex + " ->",
-        dstSemantic, "#" + dstIndex
-      );
-      console.log(v);
+      table[i] = o;
     };
 
-    astutil.mutate(root, function (context, node) {}, ctx);
+    if (common.PartitionedObjectTables) {
+      module.objectTables[type] = table;
+    } else {
+      if (module.objects)
+        throw new Error("Object table already allocated");
+      else
+        module.objects = table;
+    }
   };
 
 
   function bytesToModule (bytes, shapes) {
-    var doCycleCheck = false;
-
     var reader = new ValueReader(bytes, 0, bytes.length);
 
     var magic = reader.readBytes(common.Magic.length);
@@ -366,8 +383,17 @@
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
     var stringCount = reader.readUint32();
-    var objectCount = reader.readUint32();
     var arrayCount  = reader.readUint32();
+
+    var objectTableCount = reader.readUint32();
+    var objectTableNames = new Array(objectTableCount);
+
+    for (var i = 0; i < objectTableCount; i++) {
+      var tableType = objectTableNames[i] = reader.readUtf8String();
+      var tableCount = reader.readUint32();
+
+      allocateObjectTable(result, tableType, tableCount);
+    }
 
     var readUtf8String = function (reader) { 
       var text = reader.readUtf8String();
@@ -379,43 +405,24 @@
     result.strings = deserializeTable(reader, readUtf8String);
     console.timeEnd("  read string tables");
 
-    // Pre-allocate the objects and arrays for given IDs
-    //  so that we can reconstruct relationships in one pass.
-    result.objects   = new Array(objectCount);
-    for (var i = 0; i < objectCount; i++) {
-      var o = new Object();
-
-      if (doCycleCheck) {
-        o.__index__ = i;
-        o.__semantic__ = "Object";
-      }
-
-      result.objects[i] = o;
-    }
-
     result.arrays    = new Array(arrayCount);
     for (var i = 0; i < arrayCount; i++) {
       // FIXME: This means we have to grow it when repopulating it. :-(
       var a = new Array();
 
-      if (doCycleCheck) {
-        a.__index__ = i;
-        a.__semantic__ = "Array";
-      }
-
       result.arrays[i] = a;
     }
 
     console.time("  read objects");
-    deserializeObjects(reader, result);
+    for (var i = 0; i < objectTableCount; i++) {
+      var tableType = objectTableNames[i];
+      deserializeObjectTable(reader, result, tableType);
+    }
     console.timeEnd("  read objects");
 
     console.time("  read arrays");
-    deserializeArrays (reader, result);
+    deserializeArrays(reader, result);
     console.timeEnd("  read arrays");
-
-    if (doCycleCheck)
-      findCycles(result);
 
     return result;
   };

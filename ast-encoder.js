@@ -146,6 +146,7 @@
 
     if (common.PartitionedObjectTables) {
       this.objectTables = Object.create(null);
+      this.objectTableCount = 0;
       Object.defineProperty(this, "objects", {
         configurable: false,
         enumerable: false,
@@ -153,13 +154,18 @@
       });
     } else {
       this.objects = new ObjectTable("Object");
+      this.objectTableCount = 1;
     }
 
-    this.root_type = null;
-    this.root_id = null;
+    this.rootType = null;
+    this.rootId = null;
   };
 
+
   JsAstModule.prototype.getObjectTable = function (nodeOrShape) {
+    if (nodeOrShape === null)
+      return null;
+
     if (common.PartitionedObjectTables) {
       var shape;
 
@@ -176,8 +182,10 @@
 
       var table = this.objectTables[shape.name];
 
-      if (!table)
+      if (!table) {
         table = this.objectTables[shape.name] = new ObjectTable(shape.name);
+        this.objectTableCount += 1;
+      }
 
       return table;
     } else {
@@ -185,74 +193,19 @@
     }
   };
 
-  function test () {
-    var a, b, c, d, e, f, g, h, i, j, k;
-    var b1, b2;
-    
-    i[b >> 0] = f;
-    if (c << 24 >> 24 != f << 24 >> 24) {
-        e = d + 56 | 0;
-        g = k[e >> 2] | 0;
-        if (g) {
-            k[g + 56 >> 2] = 0;
-            k[e >> 2] = 0
-        }
-    } else f = c;
-    if (f << 24 >> 24 != 0 ? (b2(3, h), c << 24 >> 24 != (i[b >> 0] | 0)) : 0) b1(d);
+
+  JsAstModule.prototype.forEachObjectTable = function (callback) {
+    if (common.PartitionedObjectTables) {
+      for (var k in this.objectTables)
+        callback(this.objectTables[k], k);
+    } else {
+      callback(this.objects, "Object");
+    }
   };
 
 
-  // Converts an esprima ast into a JsAstModule.
-  function astToModule (root, shapes) {
-    var result = new JsAstModule(shapes);
-
-    var walkedCount = 0;
-    var progressInterval = 100000;
-
-    var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
-      if (table && (value !== null))
-        table.add(value);
-
-      walkedCount++;
-      if ((walkedCount % progressInterval) === 0) {
-        console.log("Scanned " + walkedCount + " nodes");
-        // console.log(key, value);
-      }
-    };
-
-    astutil.mutate(root, function visit (context, node) {
-      if (!node)
-        return;
-
-      var nodeTable;
-
-      if (Array.isArray(node)) {
-        nodeTable = result.arrays;
-
-        for (var i = 0, l = node.length; i < l; i++)
-          result.walkValue(i, node[i], walkCallback);
-
-      } else {
-        nodeTable = result.getObjectTable(node);
-
-        result.walkObject(node, walkCallback);
-      }
-
-      nodeTable.add(node);
-    });
-
-    var rootTable = result.getObjectTable(root);
-    // HACK
-    result.root_type = root.type;
-    result.root_id   = rootTable.get_id(root);
-
-    return result;
-  };
-
-
-  JsAstModule.prototype.deduplicateObjects = function () {
-    var objects = this.objects;
-    var count = 0, originalCount = objects.count;
+  JsAstModule.prototype.deduplicateObjectTable = function (table) {
+    var count = 0, originalCount = table.count;
 
     // Assign temporary unique indices to all observed values
     var temporaryIndices = Object.create(null);
@@ -319,7 +272,7 @@
       return existing;
     };
 
-    objects.forEach(function deduplicateObjects_callback (id) {
+    table.forEach(function deduplicateObjects_callback (id) {
       // FIXME: This is a gross hack where we do deduplication
       //  based on shallowly serializing the object and using that to
       //  find duplicates.
@@ -336,7 +289,7 @@
         // Do nothing
       } else if (existing) {
         count += 1;
-        objects.dedupe(id, existing);
+        table.dedupe(id, existing);
       } else {
         objectsByContentString[objCS] = id;
       }
@@ -346,7 +299,13 @@
     //  deduplication - all possibly deduplicated objects should get caught
     //  in the first pass by looking at structure instead of for matching IDs
 
-    console.log("Deduped " + count + " object(s) (" + (count / originalCount * 100.0).toFixed(1) + "%)");
+    if (count > 0) {
+      console.log("Deduped " + count + " object(s) (" + (count / originalCount * 100.0).toFixed(1) + "%)");  
+    }
+  };
+
+  JsAstModule.prototype.deduplicateObjects = function () {
+    this.forEachObjectTable(this.deduplicateObjectTable.bind(this));
   };
 
 
@@ -365,10 +324,12 @@
         break;
 
       case "object":
-        if (Array.isArray(value))
+        if (Array.isArray(value)) {
           callback(key, "a", this.arrays, value, callbackArg);
-        else
-          callback(key, "o", this.objects, value, callbackArg);
+        } else {
+          var table = this.getObjectTable(value);
+          callback(key, "o", table, value, callbackArg);
+        }
         break;
 
       case "boolean":
@@ -489,7 +450,7 @@
 
     if (shape.nameIndex === null)
       throw new Error("Shapes table not finalized");
-    
+
     writer.writeIndex(shape.nameIndex);
 
     var walkCallback = function (key, typeToken, table, value, fieldDefinition) {
@@ -630,7 +591,58 @@
   JsAstModule.prototype.finalize = function () {
     this.strings.finalize(true);
     this.arrays .finalize(true);
-    this.objects.finalize(true);
+
+    this.forEachObjectTable(function (table) {
+      table.finalize(true);
+    });
+  };
+
+
+  // Converts an esprima ast into a JsAstModule.
+  function astToModule (root, shapes) {
+    var result = new JsAstModule(shapes);
+
+    var walkedCount = 0;
+    var progressInterval = 100000;
+
+    var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
+      if (table && (value !== null))
+        table.add(value);
+
+      walkedCount++;
+      if ((walkedCount % progressInterval) === 0) {
+        console.log("Scanned " + walkedCount + " nodes");
+        // console.log(key, value);
+      }
+    };
+
+    astutil.mutate(root, function visit (context, node) {
+      if (!node)
+        return;
+
+      var nodeTable;
+
+      if (Array.isArray(node)) {
+        nodeTable = result.arrays;
+
+        for (var i = 0, l = node.length; i < l; i++)
+          result.walkValue(i, node[i], walkCallback);
+
+      } else {
+        nodeTable = result.getObjectTable(node);
+
+        result.walkObject(node, walkCallback);
+      }
+
+      nodeTable.add(node);
+    });
+
+    var rootTable = result.getObjectTable(root);
+    // HACK
+    result.rootType = root.type;
+    result.rootId   = rootTable.get_id(root);
+
+    return result;
   };
 
 
@@ -647,25 +659,34 @@
 
     module.finalize();
 
-    writer.writeUtf8String(module.root_type);
-    writer.writeUint32(module.root_id.get_index());
+    writer.writeUtf8String(module.rootType);
+    writer.writeUint32(module.rootId.get_index());
 
     // We write out the lengths in advance of the (length-prefixed) tables.
     // This allows a decoder to preallocate space for all the tables and
     //  use that to reconstruct relationships in a single pass.
 
     var stringCount = module.strings.get_count();
-    var objectCount = module.objects.get_count();
     var arrayCount  = module.arrays.get_count();
 
     writer.writeUint32(stringCount);
-    writer.writeUint32(objectCount);
     writer.writeUint32(arrayCount);
+
+    writer.writeUint32(module.objectTableCount);
+
+    module.forEachObjectTable(function (table, key) {
+      writer.writeUtf8String(key);
+      writer.writeUint32(table.get_count());
+    });
 
     module.serializeTable(writer, module.strings, true,  function (writer, value) {
       writer.writeUtf8String(value);
     });
-    module.serializeTable(writer, module.objects, true,  module.serializeObject);
+
+    module.forEachObjectTable(function (table) {
+      module.serializeTable(writer, table, true,  module.serializeObject);
+    });
+    
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
 
     console.log("tag bytes written:", writer.tagBytesWritten);
