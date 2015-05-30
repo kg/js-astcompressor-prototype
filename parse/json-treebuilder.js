@@ -9,6 +9,12 @@
     factory((root.jsonTreeBuilder = {}));
   }
 }(this, function (exports) {
+  // If enabled, expressions are wrapped in ExpressionStatement nodes, making
+  //  it possible to satisfy Statement type requirements.
+  // This increases the filesize of the binary representation significantly, though.
+  var GenerateExpressionStatements = false;
+
+
   function JsonTreeBuilder () {
     this.protos = Object.create(null);
   };
@@ -40,7 +46,6 @@
   };
 
   JsonTreeBuilder.prototype.makeExpressionStatement = function (expression) {
-    var result = this.make("ExpressionStatement");
     if (
       !expression || 
       (typeof (expression.type) !== "string")
@@ -52,8 +57,13 @@
       throw new Error("Cannot wrap a statement in an expression statement");
     }
 
-    result.expression = expression;
-    return this.finalize(result);
+    if (GenerateExpressionStatements) {
+      var result = this.make("ExpressionStatement");
+      result.expression = expression;
+      return this.finalize(result);
+    } else {
+      return expression;
+    }
   };
 
   JsonTreeBuilder.prototype.makeBlockStatement = function (block) {
