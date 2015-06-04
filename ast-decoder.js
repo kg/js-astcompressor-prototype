@@ -273,11 +273,28 @@
 
         case "Object":
         default:
-          index = reader.readIndex();
-          if (index === 0xFFFFFFFF)
-            value = null;
-          else
-            value = module.objects[index];
+          if (common.PartitionedObjectTables) {
+            var tagByte = reader.readByte();
+            if (tagByte === 0) {
+              value = null;
+            } else {
+              var table = module.objectTables[tagByte];
+              if (!table)
+                throw new Error("No table for tag byte 0x" + tagByte.toString(16));
+
+              index = reader.readIndex();
+              if (index === 0xFFFFFFFF)
+                throw new Error("Invalid null encoding for partitioned table mode");
+              else
+                value = table[index];
+            }
+          } else {
+            index = reader.readIndex();
+            if (index === 0xFFFFFFFF)
+              value = null;
+            else
+              value = module.objects[index];
+          }
 
           break;
 
@@ -319,14 +336,14 @@
   };
 
 
-  function deserializeObjectTable (reader, module, type) {
+  function deserializeObjectTable (reader, module, tagByte) {
     var count = reader.readUint32();
     if (count === false)
       throw new Error("Truncated file");
 
     var table;
     if (common.PartitionedObjectTables) {
-      table = module.objectTables[type];
+      table = module.objectTables[tagByte];
       if (!table)
         throw new Error("Table not found");
     } else {
@@ -340,17 +357,18 @@
   };
 
 
-  function allocateObjectTable (module, type, count) {
+  function allocateObjectTable (module, tagByte, shapeName, count) {
     var table = new Array(count);
     for (var i = 0; i < count; i++) {
       // TODO: Pre-allocate with known shape for better perf
       var o = new Object();
+      o.type = shapeName;
 
       table[i] = o;
     };
 
     if (common.PartitionedObjectTables) {
-      module.objectTables[type] = table;
+      module.objectTables[tagByte] = table;
     } else {
       if (module.objects)
         throw new Error("Object table already allocated");
@@ -392,7 +410,7 @@
       var tableType = objectTableNames[i] = reader.readUtf8String();
       var tableCount = reader.readUint32();
 
-      allocateObjectTable(result, tableType, tableCount);
+      allocateObjectTable(result, i, tableType, tableCount);
     }
 
     var readUtf8String = function (reader) { 
@@ -415,8 +433,7 @@
 
     console.time("  read objects");
     for (var i = 0; i < objectTableCount; i++) {
-      var tableType = objectTableNames[i];
-      deserializeObjectTable(reader, result, tableType);
+      deserializeObjectTable(reader, result, i);
     }
     console.timeEnd("  read objects");
 

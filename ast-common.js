@@ -62,6 +62,12 @@
     }
   };
 
+  NamedTableId.prototype.get_semantic = function () {
+    this.checkInvariants();
+
+    return this.semantic;
+  };
+
   NamedTableId.prototype.get_name = function () {
     this.checkInvariants();
 
@@ -118,9 +124,12 @@
 
 
   function NamedTable (semantic) {
+    if (!semantic)
+      throw new Error("Semantic name required");
+
     this.entries = Object.create(null);
     this.count = 0;
-    this.semantic = semantic || null;
+    this.semantic = semantic;
     this.isFinalized = false;
   };
 
@@ -467,11 +476,15 @@
     0x0D, 0x0A, 0x1A, 0x0A
   ]);
 
-  // Types that can be encoded densely in arrays
-  exports.CommonTypes = [
-    "string",
-    "object",
-    "array"
+  exports.CommonTypeTags = [
+    "Null",
+    "Any",
+    "Integer",
+    "Double",
+    "Boolean",
+    "String",
+    "Array",
+    "Object"
   ];
 
   exports.FormatName              = "asmparse-jsontreebuilder-compressed-v1";

@@ -180,10 +180,14 @@
         shape = temp.shape;
       }
 
-      var table = this.objectTables[shape.name];
+      var table = this.objectTables[shape.key];
 
       if (!table) {
-        table = this.objectTables[shape.name] = new ObjectTable(shape.name);
+        if (this.objectTableCount >= 254)
+          throw new Error("Too many object tables");
+
+        table = this.objectTables[shape.key] = new ObjectTable(shape.key);
+        table.tagByte = this.objectTableCount + 1;
         this.objectTableCount += 1;
       }
 
@@ -300,7 +304,7 @@
     //  in the first pass by looking at structure instead of for matching IDs
 
     if (count > 0) {
-      console.log("Deduped " + count + " object(s) (" + (count / originalCount * 100.0).toFixed(1) + "%)");  
+      console.log("Deduped " + count + " " + table.semantic + "(s) (" + (count / originalCount * 100.0).toFixed(1) + "%)");  
     }
   };
 
@@ -488,8 +492,22 @@
             throw new Error("Unexpected type '" + typeof(value) + "' for field '" + key + "'");
           }
 
-          var serializationValue = extractSerializationValue(table, value);
-          serializeValue(writer, true, serializationValue);
+          if (common.PartitionedObjectTables) {
+            // HACK: We can't automatically pick the right table yet,
+            //  so tag the index
+            if (table) {
+              writer.writeByte(table.tagByte);
+              var serializationValue = extractSerializationValue(table, value);
+              serializeValue(writer, true, serializationValue);
+            } else if (value === null)
+              writer.writeByte(0);
+            else
+              throw new Error("Expected either a null value or a value with a table");
+          } else {
+            var serializationValue = extractSerializationValue(table, value);
+            serializeValue(writer, true, serializationValue);
+          }
+
           break;
 
         case "Any":
