@@ -116,6 +116,7 @@
   function JsAstModule (shapes) {
     this.shapes  = shapes;
 
+    this.tags    = null;
     this.strings = null;
     this.arrays  = null;
 
@@ -137,11 +138,11 @@
 
 
   function readTypeTag (reader, module) {
-    var tagIndex = reader.readByte();
+    var tagIndex = reader.readVarUint32();
     if (tagIndex === false)
       throw new Error("Truncated file");
 
-    var tag = module.typeTags[tagIndex];
+    var tag = module.tags[tagIndex];
 
     return tag;
   };
@@ -156,6 +157,14 @@
 
   function deserializeValueWithKnownTag (reader, module, tag) {
     switch (tag) {
+      case "any": {
+        tag = readTypeTag(reader, module);
+        if (tag === "any")
+          throw new Error("Found 'any' type tag when reading any-tag");
+
+        return deserializeValueWithKnownTag(reader, module, tag);
+      }
+
       case "string":
       case "array":
       case "object": {
@@ -196,29 +205,19 @@
 
   function deserializeArrayContents (reader, module, arr) {
     var count = reader.readVarUint32();
-    var commonTypeIndex = reader.readByte();
+    var elementTypeTag = reader.readVarUint32();
 
-    if (commonTypeIndex === 0xFF) {
-      // Stream of tagged values
-      for (var i = 0; i < count; i++) {
-        var value = deserializeTaggedValue(reader, module);
-        arr[i] = value;
-      }
-    } else {
-      // Stream of indices into a specific table
-      var tag = readTypeTag(reader, module);
-
-      for (var i = 0; i < count; i++) {
-        var value = deserializeValueWithKnownTag(reader, module, tag);
-        arr[i] = value;
-      }
+    // Stream of tagged values
+    for (var i = 0; i < count; i++) {
+      var value = deserializeValueWithKnownTag(reader, module, elementTypeTag);
+      arr[i] = value;
     }
   };
 
 
   function deserializeObjectContents (reader, module, obj) {
     var shapeName = readTypeTag(reader, module);
-    
+
     var shape = module.shapes.get(shapeName);
     if (!shape)
       throw new Error("Could not find shape '" + shapeName + "'");
@@ -387,8 +386,22 @@
 
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
+    var tagCount    = reader.readUint32();
     var stringCount = reader.readUint32();
     var arrayCount  = reader.readUint32();
+
+
+    var readUtf8String = function (reader) { 
+      var text = reader.readUtf8String();
+      if (text === false)
+        throw new Error("Truncated file");
+      return text;
+    };
+
+    console.time("  read tags");
+    result.tags = deserializeTable(reader, readUtf8String);
+    console.timeEnd("  read tags");
+
 
     var objectTableCount = reader.readUint32();
     var objectTableNames = new Array(objectTableCount);
@@ -400,15 +413,11 @@
       allocateObjectTable(result, i, tableType, tableCount);
     }
 
-    var readUtf8String = function (reader) { 
-      var text = reader.readUtf8String();
-      if (text === false)
-        throw new Error("Truncated file");
-      return text;
-    };
+
     console.time("  read string tables");
     result.strings = deserializeTable(reader, readUtf8String);
     console.timeEnd("  read string tables");
+
 
     result.arrays    = new Array(arrayCount);
     for (var i = 0; i < arrayCount; i++) {

@@ -384,7 +384,7 @@
     if (shape.tagIndex === null)
       throw new Error("Tag table not finalized");
 
-    writer.writeIndex(shape.tagIndex);
+    writer.writeVarUint32(shape.tagIndex);
 
     var self = this, fields = shape.shape.fields;
     for (var i = 0, l = fields.length; i < l; i++) {
@@ -531,7 +531,7 @@
       throw new Error("No precomputed type tag for array");
 
     var tagIndex = this.getIndexForTypeTag(tag);
-    writer.writeVarUint32(tagIndex + 1);
+    writer.writeVarUint32(tagIndex);
 
     for (var i = 0, l = node.length; i < l; i++) {
       this.serializeValueWithKnownTag(writer, node[i], tag);
