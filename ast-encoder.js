@@ -156,6 +156,8 @@
     this.rootId = null;
 
     this.anyTypeValuesWritten = 0;
+
+    this._getTableForTypeTag = this.getTableForTypeTag.bind(this);
   };
 
 
@@ -339,40 +341,11 @@
   };
 
 
-  var nags = {};
-
-
   JsAstModule.prototype.serializeFieldValue = function (writer, field, value) {
     // FIXME: Hack together field definition type -> tag conversion
-    var declaredType = field.type;
-    if (Array.isArray(declaredType))
-      declaredType = "array";
+    var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
-    var isNullable = false;
-    if (declaredType[declaredType.length - 1] === "?") {
-      isNullable = true;
-      declaredType = declaredType.substr(0, declaredType.length - 1);
-    }
-
-    if (
-      (declaredType !== "any") &&
-      (declaredType !== "object") &&
-      !common.TagIsPrimitive[declaredType]
-    ) {
-      var table = this.getTableForTypeTag(declaredType);
-
-      if (!table) {
-        // HACK: Type (virtual base?) without shape
-        if (!nags[declaredType]) {
-          nags[declaredType] = true;
-          console.log("'object' fallback for " + declaredType);
-        }
-
-        declaredType = "object";
-      }
-    }
-
-    this.serializeValueWithKnownTag(writer, value, declaredType);
+    this.serializeValueWithKnownTag(writer, value, tag);
   };
 
 

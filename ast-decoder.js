@@ -198,14 +198,24 @@
         return reader.readFloat64();
 
       default:
-        throw new Error("Unhandled value type " + tag);
+        var shape = module.shapes.get(tag);
+        if (!shape)
+          throw new Error("Unhandled value type " + tag + " with no shape");
+
+        // FIXME: partitioning
+        var index = reader.readIndex();
+
+        if (index === 0xFFFFFFFF)
+          return null;
+
+        return module.objects[index];
     }
   };
 
 
   function deserializeArrayContents (reader, module, arr) {
     var count = reader.readVarUint32();
-    var elementTypeTag = reader.readVarUint32();
+    var elementTypeTag = readTypeTag(reader, module);
 
     // Stream of tagged values
     for (var i = 0; i < count; i++) {
@@ -228,66 +238,12 @@
       var fd = shape.fields[i];
       var value, index;
 
-      if (Array.isArray(fd.type)) {
-        index = reader.readIndex();
-        if (index === 0xFFFFFFFF)
-          value = null;
-        else
-          value = module.arrays[index];
-      } else switch (fd.type) {
-        case "Boolean":
-          value = Boolean(reader.readByte());
-          break;
+      var tag = common.pickTagForField(fd, function (t) {
+        var shape = module.shapes.get(t);
+        return shape;
+      });
 
-        case "Double":
-          value = reader.readFloat64();
-          break;
-
-        case "Integer":
-          // TODO: varint?
-          value = reader.readInt32();
-          break;
-
-        case "String":
-          index = reader.readIndex();
-          if (index === 0xFFFFFFFF)
-            value = null;
-          else
-            value = module.strings[index];
-
-          break;
-
-        case "Object":
-        default:
-          if (common.PartitionedObjectTables) {
-            var tagByte = reader.readByte();
-            if (tagByte === 0) {
-              value = null;
-            } else {
-              var table = module.objectTables[tagByte];
-              if (!table)
-                throw new Error("No table for tag byte 0x" + tagByte.toString(16));
-
-              index = reader.readIndex();
-              if (index === 0xFFFFFFFF)
-                throw new Error("Invalid null encoding for partitioned table mode");
-              else
-                value = table[index];
-            }
-          } else {
-            index = reader.readIndex();
-            if (index === 0xFFFFFFFF)
-              value = null;
-            else
-              value = module.objects[index];
-          }
-
-          break;
-
-        case "Any":
-          value = deserializeTaggedValue(reader, module);
-          break;
-      }
+      value = deserializeValueWithKnownTag(reader, module, tag);
 
       obj[fd.name] = value;
     }    
@@ -403,6 +359,7 @@
     console.timeEnd("  read tags");
 
 
+    console.time("  read object table directory");
     var objectTableCount = reader.readUint32();
     var objectTableNames = new Array(objectTableCount);
 
@@ -412,6 +369,7 @@
 
       allocateObjectTable(result, i, tableType, tableCount);
     }
+    console.timeEnd("  read object table directory");
 
 
     console.time("  read string tables");

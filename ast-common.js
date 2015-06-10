@@ -426,6 +426,43 @@
   };
 
 
+  var nags = Object.create(null);
+
+  function pickTagForField (field, getTableForTypeTag) {
+    var declaredType = field.type;
+    if (Array.isArray(declaredType))
+      declaredType = "array";
+
+    var isNullable = false;
+    if (declaredType[declaredType.length - 1] === "?") {
+      isNullable = true;
+      declaredType = declaredType.substr(0, declaredType.length - 1);
+    }
+
+    if (
+      (declaredType !== "any") &&
+      (declaredType !== "object") &&
+      (declaredType !== "string") &&
+      (declaredType !== "array") &&
+      !exports.TagIsPrimitive[declaredType]
+    ) {
+      var table = getTableForTypeTag(declaredType);
+
+      if (!table) {
+        // HACK: Type (virtual base?) without shape
+        if (!nags[declaredType]) {
+          nags[declaredType] = true;
+          console.log("'object' fallback for " + declaredType);
+        }
+
+        declaredType = "object";
+      }
+    }
+
+    return declaredType;
+  };
+
+
   function writeLEBUint32 (byteWriter, value) {
     var v = value;
 
@@ -495,4 +532,6 @@
   exports.ObjectTable = ObjectTable;
   exports.ShapeTable  = ShapeTable;
   exports.GetObjectId = GetObjectId;
+
+  exports.pickTagForField = pickTagForField;
 }));
