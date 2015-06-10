@@ -26,7 +26,6 @@
     this.position = 0;
     this.view     = new DataView(this.bytes.buffer);
 
-    this.tagBytesWritten = 0;
     this.varintSizes = [0, 0, 0, 0, 0, 0];
   };
 
@@ -67,11 +66,6 @@
 
   ValueWriter.prototype.writeScratchBytes = function (count) {
     this.writeBytes(this.scratchBytes, 0, count);
-  };
-
-  ValueWriter.prototype.writeTagByte = function (tagByte) {
-    this.writeByte(tagByte);
-    this.tagBytesWritten += 1;
   };
 
   ValueWriter.prototype.writeUint32 = function (value) {
@@ -134,26 +128,16 @@
   function JsAstModule (shapes) {
     this.shapes  = shapes;
 
+    // Used to store the inferred type tags for arrays during
+    //  the initial tree-walk
+    this.arrayTypeTags = new Map();
+
     this.tags    = new StringTable("Tag");
     this.strings = new StringTable("String");
     this.arrays  = new ObjectTable("Array");
 
-    // Populate the tags table with the names of the built-in tags.
-    var builtinTags = [
-      "null", "false", "true", 
-      "integer", "double",
-      "string", "array", "object",
-      "any"
-    ];
-    for (var i = 0; i < builtinTags.length; i++)
-      this.tags.add(builtinTags[i]);
-
-    // Populate the tags table with the names of all our shapes.
-    // This ensures getShapeForObject will always work.
-    var t = this.tags;
-    this.shapes.forEach(function (v) {
-      t.add(v.entry.name);
-    });
+    this.tags.add("any");
+    this.tags.add("object");
 
     if (common.PartitionedObjectTables) {
       this.objectTables = Object.create(null);
@@ -170,6 +154,8 @@
 
     this.rootType = null;
     this.rootId = null;
+
+    this.anyTypeValuesWritten = 0;
   };
 
 
@@ -194,11 +180,7 @@
       var table = this.objectTables[shape.key];
 
       if (!table) {
-        if (this.objectTableCount >= 254)
-          throw new Error("Too many object tables");
-
         table = this.objectTables[shape.key] = new ObjectTable(shape.key);
-        table.tagByte = this.objectTableCount + 1;
         this.objectTableCount += 1;
       }
 
@@ -328,8 +310,13 @@
   JsAstModule.prototype.getShapeForObject = function (obj) {
     var shapeName = obj[this.shapes.shapeKey];
 
-    if (typeof (shapeName) !== "string")
-      throw new Error("Unsupported object " + typeof (obj) + " with shape name + " + JSON.stringify(shapeName))
+    if (typeof (shapeName) !== "string") {
+      // HACK so js RegExp instances can fit into this shape model
+      if (Object.getPrototypeOf(obj) === RegExp.prototype)
+        shapeName = "RegExp";
+      else
+        throw new Error("Unsupported object " + obj + " with shape name " + JSON.stringify(shapeName))
+    }
 
     var shape = this.shapes.get(shapeName);
     if (!shape) {
@@ -340,6 +327,8 @@
     var shapeTagIndex = null;
     if (this.tags.isFinalized) {
       shapeTagIndex = this.tags.get_index(shapeName);
+    } else {
+      this.tags.add(shapeName);
     }
 
     return {
@@ -350,9 +339,40 @@
   };
 
 
+  var nags = {};
+
+
   JsAstModule.prototype.serializeFieldValue = function (writer, field, value) {
-    // FIXME
-    this.serializeValueWithKnownTag(writer, value, "any");
+    // FIXME: Hack together field definition type -> tag conversion
+    var declaredType = field.type;
+    if (Array.isArray(declaredType))
+      declaredType = "array";
+
+    var isNullable = false;
+    if (declaredType[declaredType.length - 1] === "?") {
+      isNullable = true;
+      declaredType = declaredType.substr(0, declaredType.length - 1);
+    }
+
+    if (
+      (declaredType !== "any") &&
+      (declaredType !== "object") &&
+      !common.TagIsPrimitive[declaredType]
+    ) {
+      var table = this.getTableForTypeTag(declaredType);
+
+      if (!table) {
+        // HACK: Type (virtual base?) without shape
+        if (!nags[declaredType]) {
+          nags[declaredType] = true;
+          console.log("'object' fallback for " + declaredType);
+        }
+
+        declaredType = "object";
+      }
+    }
+
+    this.serializeValueWithKnownTag(writer, value, declaredType);
   };
 
 
@@ -403,8 +423,8 @@
         if (Array.isArray(value)) {
           return "array";
         } else {
-          // FIXME: Shape detection here?
-          return "object";
+          var shape = this.getShapeForObject(value);
+          return shape.name;
         }
 
       default: {
@@ -424,13 +444,19 @@
       return this.strings;
     else if (tag === "array")
       return this.arrays;
-    else if (
-      (tag === "object")
-    )
-      // FIXME
-      return this.getObjectTable();
-    else
-      return null;
+    else {
+      var shape = this.shapes.get(tag);
+      if (shape) {
+        return this.getObjectTable(shape);
+      } else if (tag === "object") {
+        if (common.PartitionedObjectTables)
+          throw new Error("Invalid abstract-tagged object");
+        else
+          return this.getObjectTable("object");
+      } else {
+        return null;
+      }
+    }
   };
 
 
@@ -441,6 +467,10 @@
       case "false":
       case "null":
         // no-op. value is encoded by the type tag.
+        return;
+
+      case "boolean":
+        writer.writeByte(value ? 1 : 0);
         return;
 
       case "integer":
@@ -458,6 +488,7 @@
         if (tag === "any")
           throw new Error("Couldn't identify a tag for 'any' value");
 
+        this.anyTypeValuesWritten += 1;
         var tagIndex = this.getIndexForTypeTag(tag);
         writer.writeVarUint32(tagIndex);
 
@@ -473,8 +504,19 @@
     if (!table)
       throw new Error("No table for value with tag '" + tag + "'");
 
-    var index = table.get_index(value);
-    writer.writeVarUint32(index);
+    try {
+      var index;
+
+      if (value === null)
+        index = 0xFFFFFFFF;
+      else      
+        index = table.get_index(value);
+
+      writer.writeIndex(index);
+    } catch (err) {
+      console.log("Failed while writing '" + tag + "'", value);
+      throw err;
+    }
   }
 
 
@@ -484,31 +526,15 @@
 
     writer.writeVarUint32(node.length);
 
-    // HACK: Identify arrays where all elements live in the same table.
-    // This is to compensate for this prototype not using static type information
-    //  from the shapes table when compressing arrays.
-    // (A real implementation would not have this problem.)
-    var commonTypeTag = null;
-    for (var i = 0, l = node.length; i < l; i++) {
-      var item = node[i];
-      var tag = this.getTypeTagForValue(item);
+    var tag = this.arrayTypeTags.get(node);
+    if (!tag)
+      throw new Error("No precomputed type tag for array");
 
-      if (commonTypeTag === null) {
-        commonTypeTag = tag;
-      } else if (commonTypeTag !== tag) {
-        commonTypeTag = null;
-        break;
-      }
-    }
-
-    if (commonTypeTag === null)
-      commonTypeTag = "any";
-
-    var tagIndex = this.getIndexForTypeTag(commonTypeTag);
+    var tagIndex = this.getIndexForTypeTag(tag);
     writer.writeVarUint32(tagIndex + 1);
 
     for (var i = 0, l = node.length; i < l; i++) {
-      this.serializeValueWithKnownTag(writer, node[i], commonTypeTag);
+      this.serializeValueWithKnownTag(writer, node[i], tag);
     }
   };
 
@@ -544,11 +570,13 @@
     var result = new JsAstModule(shapes);
 
     var walkedCount = 0;
-    var progressInterval = 100000;
+    var progressInterval = 500000;
 
     var walkCallback = function astToModule_walkCallback (node, key, value) {
       var tag = result.getTypeTagForValue(value);
       var table = result.getTableForTypeTag(tag);
+
+      result.tags.add(tag);
 
       if (table)
         table.add(value);
@@ -560,6 +588,33 @@
       }
     };
 
+    var walkArray = function astToModule_walkArray (array) {
+      // HACK: Identify arrays where all elements live in the same table.
+      // This is to compensate for this prototype not using static type information
+      //  from the shapes table when compressing arrays.
+      // (A real implementation would not have this problem.)
+      var commonTypeTag = null;
+      for (var i = 0, l = array.length; i < l; i++) {
+        var item = array[i];
+        var tag = result.getTypeTagForValue(item);
+      
+        if (commonTypeTag === null) {
+          commonTypeTag = tag;
+        } else if (commonTypeTag !== tag) {
+          commonTypeTag = null;
+          break;
+        }
+      }
+      
+      if (commonTypeTag === null)
+        commonTypeTag = "any";
+
+      result.arrayTypeTags.set(array, commonTypeTag);
+
+      for (var i = 0, l = array.length; i < l; i++)
+        walkCallback(array, i, array[i]);
+    };
+
     astutil.mutate(root, function visit (context, node) {
       if (!node)
         return;
@@ -567,14 +622,9 @@
       var nodeTable;
 
       if (Array.isArray(node)) {
-        nodeTable = result.arrays;
-
-        for (var i = 0, l = node.length; i < l; i++)
-          walkCallback(node, i, node[i]);
-
+        walkArray(node);
       } else {
-        nodeTable = result.getObjectTable(node);
-
+        // FIXME: Use shape information to walk instead of 'for in'
         for (var k in node) {
           if (!node.hasOwnProperty(k))
             continue;
@@ -582,12 +632,13 @@
           walkCallback(node, k, node[k]);
         }
       }
-
-      nodeTable.add(node);
     });
 
-    var rootTable = result.getObjectTable(root);
     // HACK
+    var rootShape = result.getShapeForObject(root);
+    var rootTable = result.getObjectTable(root);
+    rootTable.add(root);
+
     result.rootType = root.type;
     result.rootId   = rootTable.get_id(root);
 
@@ -645,7 +696,7 @@
     
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
 
-    console.log("tag bytes written:", writer.tagBytesWritten);
+    console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);
 
     return writer.toArray();

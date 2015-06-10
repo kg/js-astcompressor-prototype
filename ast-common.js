@@ -9,6 +9,9 @@
     factory((root.astCommon = {}));
   }
 }(this, function (exports) {
+  var LogTables = false;
+
+
   function NamedTableId (entry, semantic) {
     if (!entry)
       throw new Error("Id must have an entry");
@@ -271,8 +274,12 @@
     if (this.isFinalized)
       return result;
 
-    for (i = 0; i < result.length; i++)
+    for (i = 0; i < result.length; i++) {
+      if (LogTables)
+        console.log(this.semantic, result[i].get_name(), result[i].entry.hitCount);
+
       result[i].entry.index = baseIndex + i;
+    }
 
     this.isFinalized = true;
 
@@ -462,6 +469,17 @@
     87, 101, 98, 65, 83, 77,
     0x0D, 0x0A, 0x1A, 0x0A
   ]);
+
+  // Type tags for which a value is emitted directly instead of
+  //  referred to as a table index
+  exports.TagIsPrimitive = {
+    "null"   : true,
+    "false"  : true,
+    "true"   : true,
+    "integer": true,
+    "double" : true,
+    "boolean": true
+  };
 
   exports.FormatName              = "asmparse-jsontreebuilder-compressed-v2";
   exports.EnableVarints           = true;
