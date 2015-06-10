@@ -134,14 +134,25 @@
   function JsAstModule (shapes) {
     this.shapes  = shapes;
 
+    this.tags    = new StringTable("Tag");
     this.strings = new StringTable("String");
     this.arrays  = new ObjectTable("Array");
 
-    // Populate the strings table with the names of all our shapes.
+    // Populate the tags table with the names of the built-in tags.
+    var builtinTags = [
+      "null", "false", "true", 
+      "integer", "double",
+      "string", "array", "object",
+      "any"
+    ];
+    for (var i = 0; i < builtinTags.length; i++)
+      this.tags.add(builtinTags[i]);
+
+    // Populate the tags table with the names of all our shapes.
     // This ensures getShapeForObject will always work.
-    var s = this.strings;
+    var t = this.tags;
     this.shapes.forEach(function (v) {
-      s.add(v.entry.name);
+      t.add(v.entry.name);
     });
 
     if (common.PartitionedObjectTables) {
@@ -308,124 +319,17 @@
     }
   };
 
+
   JsAstModule.prototype.deduplicateObjects = function () {
     this.forEachObjectTable(this.deduplicateObjectTable.bind(this));
   };
 
 
-  JsAstModule.prototype.walkValue = function (key, value, callback, callbackArg) {
-    switch (typeof (value)) {
-      case "string":
-        callback(key, "s", this.strings, value, callbackArg);
-        break;
-
-      case "number":
-        var i = value | 0;
-        if (i === value)
-          callback(key, "i", null, i, callbackArg);
-        else
-          callback(key, "d", null, value, callbackArg);
-        break;
-
-      case "object":
-        if (Array.isArray(value)) {
-          callback(key, "a", this.arrays, value, callbackArg);
-        } else {
-          var table = this.getObjectTable(value);
-          callback(key, "o", table, value, callbackArg);
-        }
-        break;
-
-      case "boolean":
-        callback(key, "b", null, value, callbackArg);
-        break;
-
-      default: {
-        throw new Error("Unhandled value type " + typeof (value) + " for key " + key);
-      }
-    }      
-  };
-
-
-  JsAstModule.prototype.walkObject = function (node, callback) {
-    for (var k in node) {
-      if (!node.hasOwnProperty(k))
-        continue;
-
-      var v = node[k];
-
-      this.walkValue(k, v, callback);
-    }
-  };
-
-
-  function serializeValue (writer, integral, value) {
-    if (typeof (value) === "undefined") {
-    } else if (typeof (value) === "object") {
-      var index;
-      if (value === null) {
-        // Encode nulls as 0xFFFFFFFF table indices.
-        // Inefficient, but provides for typed nulls and
-        //  eliminates the 'n' type tag
-        index = 0xFFFFFFFF;
-      } else {
-        index = value.get_index();
-      }
-      writer.writeIndex(index);
-    } else if (typeof (value) === "number") {
-      if (integral) {
-        writer.writeInt32(value);
-      } else {
-        writer.writeFloat64(value);
-      }
-    } else if (typeof (value) === "boolean") {
-      writer.writeByte(value ? 1 : 0);
-    } else {
-      console.log("Unhandled value", value);
-    }
-  }
-
-  function extractSerializationValue (
-    table, value
-  ) {
-    if (table && (value !== null)) {
-      var id = table.get_id(value);
-      if (!id)
-        throw new Error("Value not interned: " + value);
-      else if (typeof (id.get_index()) !== "number")
-        throw new Error("Value has no index: " + value);
-
-      return id;
-    }
-
-    return value;
-  }
-
-  function serializePair (
-    writer, serializeValue, 
-    key, typeToken, table, value
-  ) {
-    var typeCode = typeToken.charCodeAt(0) | 0;
-
-    writer.writeTagByte(typeCode);
-
-    var serializationValue = extractSerializationValue(table, value);
-
-    serializeValue(
-      writer, typeToken === "i", serializationValue
-    );
-  };
-
-
   JsAstModule.prototype.getShapeForObject = function (obj) {
     var shapeName = obj[this.shapes.shapeKey];
-    if (typeof (shapeName) !== "string") {
-      // HACK for esprima nonsense
-      if (Object.getPrototypeOf(obj) === RegExp.prototype)
-        shapeName = "RegExp";
-      else
-        throw new Error("Unsupported object " + typeof (obj) + " with shape name + " + JSON.stringify(shapeName))
-    }
+
+    if (typeof (shapeName) !== "string")
+      throw new Error("Unsupported object " + typeof (obj) + " with shape name + " + JSON.stringify(shapeName))
 
     var shape = this.shapes.get(shapeName);
     if (!shape) {
@@ -433,16 +337,22 @@
       throw new Error("Unknown shape " + shapeName);
     }
 
-    var shapeNameIndex = null;
-    if (this.strings.isFinalized) {
-      shapeNameIndex = this.strings.get_index(shapeName);
+    var shapeTagIndex = null;
+    if (this.tags.isFinalized) {
+      shapeTagIndex = this.tags.get_index(shapeName);
     }
 
     return {
       name: shapeName,
       shape: shape,
-      nameIndex: shapeNameIndex
+      tagIndex: shapeTagIndex
     };
+  };
+
+
+  JsAstModule.prototype.serializeFieldValue = function (writer, field, value) {
+    // FIXME
+    this.serializeValueWithKnownTag(writer, value, "any");
   };
 
 
@@ -451,75 +361,10 @@
       throw new Error("Should have used serializeArray");
 
     var shape = this.getShapeForObject(node);
+    if (shape.tagIndex === null)
+      throw new Error("Tag table not finalized");
 
-    if (shape.nameIndex === null)
-      throw new Error("Shapes table not finalized");
-
-    writer.writeIndex(shape.nameIndex);
-
-    var walkCallback = function (key, typeToken, table, value, fieldDefinition) {
-      // If the type is known, omit the type tag
-      if (Array.isArray(fieldDefinition.type)) {
-        var serializationValue = extractSerializationValue(table, value);
-        serializeValue(writer, true, serializationValue);
-
-      } else switch (fieldDefinition.type) {
-        case "Boolean":
-          writer.writeByte(value ? 1 : 0);
-          break;
-
-        case "String":
-          var serializationValue = extractSerializationValue(table, value);
-          serializeValue(writer, true, serializationValue);
-          break;
-
-        case "Double":
-          writer.writeFloat64(value);
-          break;
-
-        case "Integer":
-          // TODO: varint?
-          writer.writeInt32(value);
-          break;
-
-        case "Object":
-        default:
-          if (
-            (typeof (value) !== "object") || 
-            Array.isArray(value)
-          ) {
-            console.log(value);
-            throw new Error("Unexpected type '" + typeof(value) + "' for field '" + key + "'");
-          }
-
-          if (common.PartitionedObjectTables) {
-            // HACK: We can't automatically pick the right table yet,
-            //  so tag the index
-            if (table) {
-              writer.writeByte(table.tagByte);
-              var serializationValue = extractSerializationValue(table, value);
-              serializeValue(writer, true, serializationValue);
-            } else if (value === null)
-              writer.writeByte(0);
-            else
-              throw new Error("Expected either a null value or a value with a table");
-          } else {
-            var serializationValue = extractSerializationValue(table, value);
-            serializeValue(writer, true, serializationValue);
-          }
-
-          break;
-
-        case "Any":
-          // Variant; emit type tag
-          serializePair(
-            writer, serializeValue,
-            key, typeToken, table, value
-          );
-
-          break;
-      }
-    };
+    writer.writeIndex(shape.tagIndex);
 
     var self = this, fields = shape.shape.fields;
     for (var i = 0, l = fields.length; i < l; i++) {
@@ -529,9 +374,108 @@
       if (typeof (value) === "undefined")
         value = null;
 
-      self.walkValue(fd.name, value, walkCallback, fd);
+      this.serializeFieldValue(writer, fd, value);
     }
   };
+
+
+  JsAstModule.prototype.getTypeTagForValue = function (value) {
+    var jsType = typeof (value);
+
+    if (value === null)
+      return "null";
+
+    switch (jsType) {
+      case "string":
+        return "string";
+
+      case "boolean":
+        return value ? "true" : "false";
+
+      case "number":
+        var i = value | 0;
+        if (i === value)
+          return "integer";
+        else
+          return "double";
+
+      case "object":
+        if (Array.isArray(value)) {
+          return "array";
+        } else {
+          // FIXME: Shape detection here?
+          return "object";
+        }
+
+      default: {
+        throw new Error("Unhandled value type " + jsType);
+      }
+    }       
+  };
+
+
+  JsAstModule.prototype.getIndexForTypeTag = function (tag) {
+    return this.tags.get_index(tag);
+  };
+
+
+  JsAstModule.prototype.getTableForTypeTag = function (tag) {
+    if (tag === "string")
+      return this.strings;
+    else if (tag === "array")
+      return this.arrays;
+    else if (
+      (tag === "object")
+    )
+      // FIXME
+      return this.getObjectTable();
+    else
+      return null;
+  };
+
+
+  // Or unknown tag, if you pass 'any', because why not.
+  JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag) {
+    switch (tag) {
+      case "true":
+      case "false":
+      case "null":
+        // no-op. value is encoded by the type tag.
+        return;
+
+      case "integer":
+        // TODO: varint?
+        writer.writeInt32(value);
+        return;
+
+      case "double":
+        writer.writeFloat64(value);
+        return;
+
+      case "any": {
+        // FIXME: gross.
+        tag = this.getTypeTagForValue(value);
+        if (tag === "any")
+          throw new Error("Couldn't identify a tag for 'any' value");
+
+        var tagIndex = this.getIndexForTypeTag(tag);
+        writer.writeVarUint32(tagIndex);
+
+        return this.serializeValueWithKnownTag(writer, value, tag);
+      }
+
+      case "object":
+      default:
+        break;
+    }
+
+    var table = this.getTableForTypeTag(tag);
+    if (!table)
+      throw new Error("No table for value with tag '" + tag + "'");
+
+    var index = table.get_index(value);
+    writer.writeVarUint32(index);
+  }
 
 
   JsAstModule.prototype.serializeArray = function (writer, node) {
@@ -544,55 +488,33 @@
     // This is to compensate for this prototype not using static type information
     //  from the shapes table when compressing arrays.
     // (A real implementation would not have this problem.)
-    var commonType;
+    var commonTypeTag = null;
     for (var i = 0, l = node.length; i < l; i++) {
       var item = node[i];
-      var itemType;
+      var tag = this.getTypeTagForValue(item);
 
-      if (item === null)
-        continue;
-
-      if (Array.isArray(item))
-        itemType = "array";
-      else
-        itemType = typeof(item);
-
-      if (typeof (commonType) === "undefined")
-        commonType = itemType;
-      else if (itemType !== commonType) {
-        commonType = undefined;
+      if (commonTypeTag === null) {
+        commonTypeTag = tag;
+      } else if (commonTypeTag !== tag) {
+        commonTypeTag = null;
         break;
       }
     }
 
-    // If the common type is in our table, encode without type tags
-    var commonTypeIndex = common.CommonTypes.indexOf(commonType);
-    if (commonTypeIndex >= 0) {
-      writer.writeByte(commonTypeIndex);
+    if (commonTypeTag === null)
+      commonTypeTag = "any";
 
-      for (var i = 0, l = node.length; i < l; i++) {
-        this.walkValue(i, node[i], function (key, typeToken, table, value) {
-          var serializationValue = extractSerializationValue(table, value);
-          serializeValue(writer, true, serializationValue);
-        });
-      }
-    } else {
-      writer.writeByte(0xFF);
+    var tagIndex = this.getIndexForTypeTag(commonTypeTag);
+    writer.writeVarUint32(tagIndex + 1);
 
-      for (var i = 0, l = node.length; i < l; i++) {
-        this.walkValue(i, node[i], function (a, b, c, d) {
-          serializePair(
-            writer, serializeValue,
-            a, b, c, d
-          );
-        });
-      }
+    for (var i = 0, l = node.length; i < l; i++) {
+      this.serializeValueWithKnownTag(writer, node[i], commonTypeTag);
     }
   };
 
 
   JsAstModule.prototype.serializeTable = function (writer, table, ordered, serializeEntry) {
-    var finalized = table.finalize(ordered);
+    var finalized = table.finalize(0);
 
     writer.writeUint32(finalized.length);
 
@@ -607,8 +529,9 @@
 
 
   JsAstModule.prototype.finalize = function () {
-    this.strings.finalize(true);
-    this.arrays .finalize(true);
+    this.tags   .finalize(0);
+    this.strings.finalize(0);
+    this.arrays .finalize(0);
 
     this.forEachObjectTable(function (table) {
       table.finalize(true);
@@ -623,8 +546,11 @@
     var walkedCount = 0;
     var progressInterval = 100000;
 
-    var walkCallback = function astToModule_walkCallback (key, typeToken, table, value) {
-      if (table && (value !== null))
+    var walkCallback = function astToModule_walkCallback (node, key, value) {
+      var tag = result.getTypeTagForValue(value);
+      var table = result.getTableForTypeTag(tag);
+
+      if (table)
         table.add(value);
 
       walkedCount++;
@@ -644,12 +570,17 @@
         nodeTable = result.arrays;
 
         for (var i = 0, l = node.length; i < l; i++)
-          result.walkValue(i, node[i], walkCallback);
+          walkCallback(node, i, node[i]);
 
       } else {
         nodeTable = result.getObjectTable(node);
 
-        result.walkObject(node, walkCallback);
+        for (var k in node) {
+          if (!node.hasOwnProperty(k))
+            continue;
+
+          walkCallback(node, k, node[k]);
+        }
       }
 
       nodeTable.add(node);
@@ -684,20 +615,27 @@
     // This allows a decoder to preallocate space for all the tables and
     //  use that to reconstruct relationships in a single pass.
 
+    var tagCount    = module.tags.get_count();
     var stringCount = module.strings.get_count();
     var arrayCount  = module.arrays.get_count();
 
+    writer.writeUint32(tagCount);
     writer.writeUint32(stringCount);
     writer.writeUint32(arrayCount);
+
+    module.serializeTable(writer, module.tags, true, function (writer, value) {
+      writer.writeUtf8String(value);
+    });
 
     writer.writeUint32(module.objectTableCount);
 
     module.forEachObjectTable(function (table, key) {
+      // FIXME: Tag index instead? Implied tag index by order?
       writer.writeUtf8String(key);
       writer.writeUint32(table.get_count());
     });
 
-    module.serializeTable(writer, module.strings, true,  function (writer, value) {
+    module.serializeTable(writer, module.strings, true, function (writer, value) {
       writer.writeUtf8String(value);
     });
 
@@ -714,28 +652,10 @@
   };
 
 
-  // Esprima is a nightmare that deviates from reflect.parse in unhelpful ways
-  function esprimaCleanup (root) {
-    var newRoot = astutil.mutate(root, function (context, node) {
-      if (!node)
-        return;
-
-      if (node.type === "Literal") {
-        // FIXME: UGH esprima/escodegen completely mangle literals
-        delete node["raw"];
-        delete node["regex"];
-      }
-    });
-
-    return newRoot;
-  };
-
-
   exports.PrettyJson      = common.PrettyJson;
 
   exports.ShapeTable      = common.ShapeTable;
 
   exports.astToModule     = astToModule;
   exports.serializeModule = serializeModule;
-  exports.esprimaCleanup  = esprimaCleanup;
 }));

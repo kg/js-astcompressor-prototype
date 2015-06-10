@@ -136,31 +136,42 @@
   };
 
 
-  function deserializeTaggedValue (reader, module) {
-    var typeCode = reader.readByte();
-    if (typeCode === false)
+  function readTypeTag (reader, module) {
+    var tagIndex = reader.readByte();
+    if (tagIndex === false)
       throw new Error("Truncated file");
 
-    var typeToken = String.fromCharCode(typeCode);
+    var tag = module.typeTags[tagIndex];
 
-    switch (typeToken) {
-      case "s":
-      case "a":
-      case "o":
-      case "r": {
+    return tag;
+  };
+
+
+  function deserializeTaggedValue (reader, module) {
+    var tag = readTypeTag(reader, module);
+
+    return deserializeValueWithKnownTag(reader, module, tag);
+  };
+
+
+  function deserializeValueWithKnownTag (reader, module, tag) {
+    switch (tag) {
+      case "string":
+      case "array":
+      case "object": {
         var index = reader.readIndex();
 
         if (index === 0xFFFFFFFF)
           return null;
 
-        switch (typeToken) {
-          case "s":
+        switch (tag) {
+          case "string":
             return module.strings[index];
 
-          case "a":
+          case "array":
             return module.arrays[index];
 
-          case "o":
+          case "object":
             return module.objects[index];
 
           default:
@@ -168,17 +179,17 @@
         }
       }
 
-      case "b":
+      case "boolean":
         return Boolean(reader.readByte());
 
-      case "i":
+      case "integer":
         return reader.readInt32();
 
-      case "d":
+      case "double":
         return reader.readFloat64();
 
       default:
-        throw new Error("Unhandled value type " + typeToken);
+        throw new Error("Unhandled value type " + tag);
     }
   };
 
@@ -195,43 +206,19 @@
       }
     } else {
       // Stream of indices into a specific table
-      var commonTypeName = common.CommonTypes[commonTypeIndex];
-      var table;
-
-      switch (commonTypeName) {
-        case "string":
-          table = module.strings;
-          break;
-
-        case "array":
-          table = module.arrays;
-          break;
-
-        case "object":
-          table = module.objects;
-          break;
-
-        default:
-          throw new Error("Unknown common type name: " + commonTypeName);
-      }
+      var tag = readTypeTag(reader, module);
 
       for (var i = 0; i < count; i++) {
-        var index = reader.readIndex();
-
-        if (index === 0xFFFFFFFF)
-          arr[i] = null;
-        else
-          arr[i] = table[index];
+        var value = deserializeValueWithKnownTag(reader, module, tag);
+        arr[i] = value;
       }
     }
   };
 
 
   function deserializeObjectContents (reader, module, obj) {
-    var shapeNameIndex = reader.readIndex();
-    var shapeName = module.strings[shapeNameIndex];
-    if (!shapeName)
-      throw new Error("Could not look up shape name #" + shapeNameIndex);    
+    var shapeName = readTypeTag(reader, module);
+    
     var shape = module.shapes.get(shapeName);
     if (!shape)
       throw new Error("Could not find shape '" + shapeName + "'");

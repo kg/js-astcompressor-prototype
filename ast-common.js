@@ -248,9 +248,11 @@
     targetEntry.hitCount += 1;
   };
 
-  NamedTable.prototype.finalize = function (ordered) {
+  NamedTable.prototype.finalize = function (baseIndex) {
     var result = new Array(this.count);
     var i = 0;
+
+    baseIndex |= 0;
 
     this.forEach(function (id) {
       result[i++] = id;
@@ -259,39 +261,18 @@
     if (i !== this.count)
       throw new Error("Count mismatch");
 
-    if (ordered) {
-      result.sort(function (lhs, rhs) {
-        var lhsHitCount = lhs.entry.hitCount;
-        var rhsHitCount = rhs.entry.hitCount;
+    result.sort(function (lhs, rhs) {
+      var lhsHitCount = lhs.entry.hitCount;
+      var rhsHitCount = rhs.entry.hitCount;
 
-        return (rhsHitCount - lhsHitCount);
-      });
-    }
+      return (rhsHitCount - lhsHitCount);
+    });
 
     if (this.isFinalized)
       return result;
 
-    // TODO: Maintain a hit count for each entry,
-    //  sort by hit count descending, so that most used
-    //  entries are first.
-    // Then apply an efficient variable-length index encoding.
-    // FIXME: This seems to break serialization somehow...
-    /*
-    result.sort(function (_lhs, _rhs) {
-      var lhs = _lhs.get_name();
-      var rhs = _rhs.get_name();
-
-      if (rhs > lhs)
-        return -1;
-      else if (rhs < lhs)
-        return 1;
-      else
-        return 0;
-    });
-    */
-
     for (i = 0; i < result.length; i++)
-      result[i].entry.index = i;
+      result[i].entry.index = baseIndex + i;
 
     this.isFinalized = true;
 
@@ -364,6 +345,12 @@
   var GetObjectId_nextId = 0;
 
   function GetObjectId (obj) {
+    if (typeof (obj) !== "object")
+      throw new Error("GetObjectId expected object, got '" + typeof (obj) + "'");
+    else if (obj === null)
+      // HACK
+      return -1;
+
     var existing = GetObjectId_table.get(obj);
     if (typeof (existing) === "number")
       return existing;
@@ -476,18 +463,7 @@
     0x0D, 0x0A, 0x1A, 0x0A
   ]);
 
-  exports.CommonTypeTags = [
-    "Null",
-    "Any",
-    "Integer",
-    "Double",
-    "Boolean",
-    "String",
-    "Array",
-    "Object"
-  ];
-
-  exports.FormatName              = "asmparse-jsontreebuilder-compressed-v1";
+  exports.FormatName              = "asmparse-jsontreebuilder-compressed-v2";
   exports.EnableVarints           = true;
   exports.PartitionedObjectTables = false;
 

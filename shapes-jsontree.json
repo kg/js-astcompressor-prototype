@@ -2,34 +2,34 @@
   "shapeKey": "type",
   "shapes": {
     "RegExp": {
-      "pattern": "String",
-      "flags": "String"
+      "pattern": "string",
+      "flags": "string"
     },
     "MemberAccess": {
       "lhs": "Expression",
-      "memberName": "String"
+      "memberName": "string"
     },
     "ComputedMemberAccess": {
       "lhs": "Expression",
       "rhs": "Expression"
     },
     "Identifier": {
-      "identifier": "String"
+      "identifier": "string"
     },
     "RegExpLiteral": {
       "value": "RegExp"
     },
     "BooleanLiteral": {
-      "value": "Boolean"
+      "value": "boolean"
     },
     "StringLiteral": {
-      "value": "String"
+      "value": "string"
     },
     "IntegerLiteral": {
-      "value": "Integer"
+      "value": "integer"
     },
     "DoubleLiteral": {
-      "value": "Double"
+      "value": "double"
     },
     "ObjectLiteral": {
       "pairs": ["Pair"]
@@ -38,11 +38,11 @@
       "values": ["Expression"]
     },
     "Pair": {
-      "key": "Any",
+      "key": "any",
       "value": "Expression"
     },
     "UnaryOperator": {
-      "operator": "String",
+      "operator": "string",
       "rhs": "Expression"
     },
     "NullStatement": {
@@ -51,10 +51,10 @@
       "expression": "Expression"
     },
     "BreakStatement": {
-      "label": "String?"
+      "label": "string?"
     },
     "ContinueStatement": {
-      "label": "String?"
+      "label": "string?"
     },
     "ReturnStatement": {
       "expression": "Expression?"
@@ -66,7 +66,7 @@
       "expressions": ["Expression"]
     },
     "LabelStatement": {
-      "labels": ["String"],
+      "labels": ["string"],
       "block": "Block"
     },
     "ForStatement": {
@@ -90,7 +90,7 @@
       "finallyBlock": "Block?"
     },
     "ForInDeclaration": {
-      "variableName": "String",
+      "variableName": "string",
       "sequenceExpression": "Expression"
     },
     "ForInStatement": {
@@ -106,20 +106,20 @@
       "body": "Block?"
     },
     "PostfixMutation": {
-      "operator": "String",
+      "operator": "string",
       "lhs": "Expression"
     },
     "PrefixMutation": {
-      "operator": "String",
+      "operator": "string",
       "rhs": "Expression"
     },
     "BinaryOperator": {
-      "operator": "String",
+      "operator": "string",
       "lhs": "Expression",
       "rhs": "Expression"
     },
     "AssignmentOperator": {
-      "operator": "String",
+      "operator": "string",
       "lhs": "Expression",
       "rhs": "Expression"
     },
@@ -132,7 +132,7 @@
       "declarations": ["Declaration"]
     },
     "Declaration": {
-      "name": "String",
+      "name": "string",
       "initialValue": "Expression?"
     },
     "Invocation": {
@@ -151,8 +151,8 @@
       "block": "Block"
     },
     "Function": {
-      "name": "String?",
-      "argumentNames": ["String"],
+      "name": "string?",
+      "argumentNames": ["string"],
       "body": "Block"
     },
     "TopLevel": {
