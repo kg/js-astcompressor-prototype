@@ -72,7 +72,7 @@
     "ForStatement": {
       "initialize": "Expression?",
       "update": "Expression?",
-      "terminate": "Expression?",
+      "condition": "Expression?",
       "body": "Statement"
     },
     "WhileStatement": {
