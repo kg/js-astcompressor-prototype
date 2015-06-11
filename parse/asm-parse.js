@@ -774,9 +774,9 @@
       }
     }
 
-    var block = this.parseBlockOrStatement();
+    var labelled = this.parseBlockOrStatement();
 
-    return this.builder.makeLabelStatement(labels, block);
+    return this.builder.makeLabelStatement(labels, labelled);
   };
 
 

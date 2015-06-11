@@ -229,6 +229,11 @@
     else if (!targetEntry)
       throw new Error("target must exist");
 
+    if (sourceEntry.id.semantic !== this.semantic)
+      throw new Error("source is from the wrong table");
+    else if (targetEntry.id.semantic !== this.semantic)
+      throw new Error("target is from the wrong table");
+
     // Invalidate the entry.
     sourceEntry.isInvalidated = true;
     // Deduped entries aren't counted or iterated by forEach
@@ -433,12 +438,6 @@
     if (Array.isArray(declaredType))
       declaredType = "array";
 
-    var isNullable = false;
-    if (declaredType[declaredType.length - 1] === "?") {
-      isNullable = true;
-      declaredType = declaredType.substr(0, declaredType.length - 1);
-    }
-
     if (
       (declaredType !== "any") &&
       (declaredType !== "object") &&
@@ -519,10 +518,26 @@
   };
 
   exports.FormatName              = "asmparse-jsontreebuilder-compressed-v2";
-  exports.EnableVarints           = true;
-  exports.PartitionedObjectTables = false;
 
+  // Write indices as LEB128 32-bit uints instead of 4-byte uints
+  exports.EnableVarints           = true;
+
+  // Partition objects into individual tables and index spaces by
+  //  their statically known types.
+  // Fields without statically known types have type info emitted.
+  exports.PartitionedObjectTables = true;
+
+  // When using partitioned tables, instead of writing type tags,
+  //  all objects have (larger) indices into a global index space.
+  // This produces indices that are larger (LEB) but in best case
+  //  they are smaller than a tag + local index pair.
+  exports.GlobalIndexSpace        = false;
+  
+  // Expected and decoded json ASTs are pretty printed.
+  // Can't be on by default because JSON.stringify in node is
+  //  super busted for large objects.
   exports.PrettyJson              = false;
+
 
   exports.ShapeDefinition = ShapeDefinition;
 

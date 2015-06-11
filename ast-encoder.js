@@ -11,13 +11,13 @@
 }(this, function (exports) {
   var common = require("./ast-common.js");
 
-  var testRegex = /asdf/g;
-
   var NamedTable  = common.NamedTable,
       UniqueTable = common.UniqueTable,
       StringTable = common.StringTable,
       ObjectTable = common.ObjectTable,
       GetObjectId = common.GetObjectId;
+
+  var IoTrace = false;
 
   function ValueWriter () {
     // HACK: Max size 32mb because growable buffers are effort
@@ -70,17 +70,26 @@
   };
 
   ValueWriter.prototype.writeUint32 = function (value) {
+    if (IoTrace)
+      console.log("write uint", value.toString(16));
+
     this.view.setUint32(this.position, value, true);
     this.position += 4;
   };
 
   ValueWriter.prototype.writeInt32 = function (value) {
+    if (IoTrace)
+      console.log("write int", value.toString(16));
+
     this.view.setInt32(this.position, value, true);
     this.position += 4;
   };
 
   ValueWriter.prototype.writeVarUint32 = function (value) {
     if (common.EnableVarints) {
+      if (IoTrace)
+        console.log("write varuint", value.toString(16));
+
       var before = this.position;
       common.writeLEBUint32(this, value);
       var after = this.position;
@@ -99,6 +108,9 @@
   };
 
   ValueWriter.prototype.writeFloat64 = function (value) {
+    if (IoTrace)
+      console.log("write float64", value.toFixed(4));
+
     this.view.setFloat64(this.position, value, true);
     this.position += 8;
   };
@@ -133,9 +145,9 @@
     //  the initial tree-walk
     this.arrayTypeTags = new Map();
 
-    this.tags    = new StringTable("Tag");
-    this.strings = new StringTable("String");
-    this.arrays  = new ObjectTable("Array");
+    this.tags    = new StringTable("tag");
+    this.strings = new StringTable("string");
+    this.arrays  = new ObjectTable("array");
 
     this.tags.add("any");
     this.tags.add("object");
@@ -149,7 +161,7 @@
         get: function () { throw new Error("module.objects not available in partitioned tables mode"); }
       });
     } else {
-      this.objects = new ObjectTable("Object");
+      this.objects = new ObjectTable("object");
       this.objectTableCount = 1;
     }
 
@@ -201,17 +213,16 @@
   };
 
 
-  JsAstModule.prototype.deduplicateObjectTable = function (table) {
+  JsAstModule.prototype.deduplicateObjectTable = function (state, table) {
     var count = 0, originalCount = table.count;
 
     // Assign temporary unique indices to all observed values
     var temporaryIndices = Object.create(null);
     var nextTemporaryIndex = 0;
-    // On first visit to an object generate a content string
-    var contentStrings = Object.create(null);
-    var cycleSentinel = Object.create(null);
-    // Lookup table by content string, for deduping
-    var objectsByContentString = Object.create(null);
+
+    var contentStrings = state.contentStrings;
+    var cycleSentinel = state.cycleSentinel;
+    var objectsByContentString = state.objectsByContentString;
 
     function getTemporaryIndex (value) {
       var existing = temporaryIndices[value];
@@ -296,14 +307,30 @@
     //  deduplication - all possibly deduplicated objects should get caught
     //  in the first pass by looking at structure instead of for matching IDs
 
-    if (count > 0) {
-      console.log("Deduped " + count + " " + table.semantic + "(s) (" + (count / originalCount * 100.0).toFixed(1) + "%)");  
-    }
+    state.originalCount += originalCount;
+    state.count += count;
   };
 
 
   JsAstModule.prototype.deduplicateObjects = function () {
-    this.forEachObjectTable(this.deduplicateObjectTable.bind(this));
+    var state = {
+      contentStrings:         Object.create(null),
+      cycleSentinel:          Object.create(null),
+      objectsByContentString: Object.create(null),
+      originalCount:          0,
+      count:                  0
+    };
+
+    this.forEachObjectTable(this.deduplicateObjectTable.bind(this, state));
+
+    if (state.count > 0) {
+      console.log(
+        "Deduped " + state.count + 
+        " object(s) (" + 
+        (state.count / state.originalCount * 100.0).toFixed(1) + 
+        "%)"
+      );
+    }    
   };
 
 
@@ -342,11 +369,16 @@
   };
 
 
-  JsAstModule.prototype.serializeFieldValue = function (writer, field, value) {
+  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
-    this.serializeValueWithKnownTag(writer, value, tag);
+    try {
+      this.serializeValueWithKnownTag(writer, value, tag);
+    } catch (exc) {
+      console.log("Failed while writing field " + field.name + " of type " + shape.name);
+      throw exc;
+    }
   };
 
 
@@ -358,6 +390,9 @@
     if (shape.tagIndex === null)
       throw new Error("Tag table not finalized");
 
+    if (IoTrace)
+      console.log("// object body");
+
     writer.writeVarUint32(shape.tagIndex);
 
     var self = this, fields = shape.shape.fields;
@@ -368,7 +403,10 @@
       if (typeof (value) === "undefined")
         value = null;
 
-      this.serializeFieldValue(writer, fd, value);
+      this.serializeFieldValue(writer, shape, fd, value);
+
+      if (IoTrace)
+        console.log("// " + fd.name + " =", value);      
     }
   };
 
@@ -450,8 +488,6 @@
 
   // Or unknown tag, if you pass 'any', because why not.
   JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag) {
-    console.log("write", tag);
-
     switch (tag) {
       case "true":
       case "false":
@@ -473,6 +509,9 @@
         return;
 
       case "any": {
+        if (IoTrace)
+          console.log("write any ->");
+
         // FIXME: gross.
         tag = this.getTypeTagForValue(value);
         if (tag === "any")
@@ -502,7 +541,20 @@
 
     var isUntypedObject = (tag === "object");
 
+    if ((actualValueTag !== tag) && !isUntypedObject)
+      throw new Error("Shape information specified type '" + tag + "' but actual type is '" + actualValueTag + "'");
+
+    if (IoTrace) {
+      if (tag !== actualValueTag)
+        console.log("write " + tag + " -> " + actualValueTag);
+      else
+        console.log("write " + tag);
+    }
+
     try {
+      if (table.semantic !== actualValueTag)
+        throw new Error("Wrong table: " + table.semantic + " !== " + actualValueTag);
+
       var index = table.get_index(value);
 
       // For objects where the exact shape is unknown, in partitioned mode
@@ -512,7 +564,6 @@
         // TODO: Encode using global index space instead to make best-case size still one byte.
         this.anyTypeValuesWritten += 1;
         var tagIndex = this.getIndexForTypeTag(actualValueTag);
-        console.log("write tag", tagIndex, actualValueTag);
         writer.writeIndex(tagIndex);
         writer.writeIndex(index);
       } else {
@@ -573,7 +624,6 @@
   };
 
 
-  // Converts an esprima ast into a JsAstModule.
   function astToModule (root, shapes) {
     var result = new JsAstModule(shapes);
 
@@ -694,6 +744,10 @@
     });
 
     module.forEachObjectTable(function (table) {
+      // IoTrace = (table.semantic === "IfStatement");
+      if (IoTrace)
+        console.log("// table " + table.semantic);
+
       module.serializeTable(writer, table, true,  module.serializeObject);
     });
     

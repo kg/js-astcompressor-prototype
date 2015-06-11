@@ -17,6 +17,9 @@
       ObjectTable = common.ObjectTable;
 
 
+  var IoTrace = false;
+
+
   function ValueReader (bytes, index, count) {
     this.bytes        = bytes;
     this.byteReader   = encoding.makeByteReader(bytes, index, count);
@@ -59,14 +62,20 @@
     if (!this.readScratchBytes(4))
       return false;
 
-    return this.scratchU32[0];
+    var result = this.scratchU32[0];
+    if (IoTrace)
+      console.log("read  uint", result.toString(16));
+    return result;
   };
 
   ValueReader.prototype.readInt32 = function () {
     if (!this.readScratchBytes(4))
       return false;
 
-    return this.scratchI32[0];
+    var result = this.scratchI32[0];
+    if (IoTrace)
+      console.log("read  int", result.toString(16));
+    return result;
   };
 
   ValueReader.prototype.readVarUint32 = function () {
@@ -74,6 +83,8 @@
       return this.readUint32();
 
     var result = common.readLEBUint32(this.byteReader);
+    if (IoTrace)
+      console.log("read  varuint", result.toString(16));
     return result;
   };
 
@@ -90,7 +101,10 @@
     if (!this.readScratchBytes(8))
       return false;
 
-    return this.scratchF64[0];
+    var result = this.scratchF64[0];
+    if (IoTrace)
+      console.log("read  float64", result.toFixed(4));
+    return result;
   };
 
   ValueReader.prototype.readUtf8String = function () {
@@ -173,40 +187,52 @@
 
 
   function deserializeValueWithKnownTag (reader, module, tag) {
-    console.log("read ", tag);
-
     switch (tag) {
       case "any": {
         tag = readTypeTag(reader, module);
         if (tag === "any")
           throw new Error("Found 'any' type tag when reading any-tag");
 
+        if (IoTrace)
+          console.log("read  any ->");
         return deserializeValueWithKnownTag(reader, module, tag);
       }
 
       case "string":
         var index = reader.readIndex();
+        if (IoTrace)
+          console.log("read  string");
         return getTableEntry(module.strings, index);
 
       case "array":
         var index = reader.readIndex();
+        if (IoTrace)
+          console.log("read  array");
         return getTableEntry(module.arrays, index);
 
       case "object":
         var objectTable;
         if (common.PartitionedObjectTables) {
           var tagIndex = reader.readIndex();
+          if (tagIndex === 0xFFFFFFFF)
+            return null;
+
           var actualTag = module.tags[tagIndex];
-          console.log("read  tag", tagIndex, actualTag);
           if (typeof (actualTag) !== "string")
             throw new Error("No tag with index " + tagIndex + " exists");
           else if (actualTag === "object")
             throw new Error("Actual tag of untyped object was 'object'.");
           
+          if (IoTrace)
+            console.log("read  object -> " + actualTag);
+
           objectTable = module.objectTables[actualTag];
           if (!objectTable)
             throw new Error("No object table for tag '" + actualTag + "'");
         } else {
+          if (IoTrace)
+            console.log("read  object");
+
           objectTable = module.objects;
         }
 
@@ -260,6 +286,9 @@
   function deserializeObjectContents (reader, module, obj) {
     var shapeName = readTypeTag(reader, module);
 
+    if (IoTrace)
+      console.log("// object body");
+
     var shape = module.shapes.get(shapeName);
     if (!shape)
       throw new Error("Could not find shape '" + shapeName + "'");
@@ -277,8 +306,14 @@
 
       value = deserializeValueWithKnownTag(reader, module, tag);
 
+      if (IoTrace)
+        console.log("// " + fd.name + " =", value);
+      
       obj[fd.name] = value;
-    }    
+    }
+
+    if (IoTrace)
+      console.log(obj);
   };
 
 
@@ -317,6 +352,10 @@
 
     var table;
     if (common.PartitionedObjectTables) {
+      // IoTrace = (tag === "IfStatement");
+      if (IoTrace)
+        console.log("// table " + tag);
+
       table = module.objectTables[tag];
       if (!table)
         throw new Error("Table not found");

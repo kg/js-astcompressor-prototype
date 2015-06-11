@@ -72,10 +72,10 @@
     return this.finalize(result);
   };
 
-  JsonTreeBuilder.prototype.makeLabelStatement = function (labels, block) {
+  JsonTreeBuilder.prototype.makeLabelStatement = function (labels, labelled) {
     var result = this.make("LabelStatement");
     result.labels = labels;
-    result.block = block;
+    result.labelled = labelled;
     return this.finalize(result);
   };
 
