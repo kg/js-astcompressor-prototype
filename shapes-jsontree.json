@@ -1,10 +1,6 @@
 {
   "shapeKey": "type",
   "shapes": {
-    "RegExp": {
-      "pattern": "string",
-      "flags": "string"
-    },
     "MemberAccess": {
       "lhs": "Expression",
       "memberName": "string"
@@ -17,7 +13,8 @@
       "identifier": "string"
     },
     "RegExpLiteral": {
-      "value": "RegExp"
+      "pattern": "string",
+      "flags": "string"
     },
     "BooleanLiteral": {
       "value": "boolean"

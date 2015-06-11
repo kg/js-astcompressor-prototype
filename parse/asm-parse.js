@@ -1066,6 +1066,27 @@
           break;
 
         case "regexp":
+          var pattern = token.value.source;
+          var flags;
+          if (typeof (token.value.flags) === "string")
+            flags = token.value.flags;
+          else {
+            flags = "";
+            if (token.value.global)
+              flags += "g";
+            if (token.value.unicode)
+              flags += "u";
+            if (token.value.sticky)
+              flags += "y";
+            if (token.value.ignoreCase)
+              flags += "i";
+            if (token.value.multiline)
+              flags += "m";
+          }
+
+          lhs = this.builder.makeRegExpLiteralExpression(pattern, flags);
+          break;
+
         case "integer":
         case "double":
         case "string":

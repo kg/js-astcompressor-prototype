@@ -11,6 +11,8 @@
 }(this, function (exports) {
   var common = require("./ast-common.js");
 
+  var testRegex = /asdf/g;
+
   var NamedTable  = common.NamedTable,
       UniqueTable = common.UniqueTable,
       StringTable = common.StringTable,

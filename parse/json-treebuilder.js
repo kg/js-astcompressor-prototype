@@ -209,10 +209,17 @@
     return this.finalize(result);
   };
 
+  JsonTreeBuilder.prototype.makeRegExpLiteralExpression = function (pattern, flags) {
+    var result = this.make("RegExpLiteral");
+    result.pattern = pattern;
+    result.flags = flags;
+    return this.finalize(result);
+  };
+
   JsonTreeBuilder.prototype.makeLiteralExpression = function (type, value) {
     var titleCaseType = type[0].toUpperCase() + type.substr(1);
     if (type === "regexp")
-      titleCaseType = "RegExp";
+      throw new Error("Invalid");
 
     var result = this.make(titleCaseType + "Literal");
     result.value = value;

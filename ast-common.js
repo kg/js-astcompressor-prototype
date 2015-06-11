@@ -522,7 +522,7 @@
   exports.EnableVarints           = true;
   exports.PartitionedObjectTables = false;
 
-  exports.PrettyJson              = true;
+  exports.PrettyJson              = false;
 
   exports.ShapeDefinition = ShapeDefinition;
 
