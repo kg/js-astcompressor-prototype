@@ -83,7 +83,7 @@
   };
 
   function is32Bit (x) {
-    return (x === (x | 0)) || (x === (x >>> 0));
+    return (x === (x | 0)) /* || (x === (x >>> 0)) */;
   };
 
   function isIdentifierPrefix (ch) {

@@ -35,7 +35,7 @@
       "pairs": ["Pair"]
     },
     "ArrayLiteral": {
-      "values": ["Expression"]
+      "elements": ["Expression"]
     },
     "Pair": {
       "key": "any",

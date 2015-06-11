@@ -132,8 +132,7 @@
       this.objects = null;
     }
 
-    this.rootType = null;
-    this.rootIndex = null;
+    this.root = null;
   };
 
 
@@ -155,6 +154,21 @@
   };
 
 
+  function getTableEntry (table, index) {
+    if (index === 0xFFFFFFFF)
+      return null;
+
+    if ((index < 0) || (index >= table.length))
+      throw new Error("Invalid index " + index);
+
+    var result = table[index];
+    if (typeof (result) === "undefined")
+      throw new Error("Uninitialized at index " + index);
+
+    return result;
+  };
+
+
   function deserializeValueWithKnownTag (reader, module, tag) {
     switch (tag) {
       case "any": {
@@ -170,18 +184,15 @@
       case "object": {
         var index = reader.readIndex();
 
-        if (index === 0xFFFFFFFF)
-          return null;
-
         switch (tag) {
           case "string":
-            return module.strings[index];
+            return getTableEntry(module.strings, index);
 
           case "array":
-            return module.arrays[index];
+            return getTableEntry(module.arrays, index);
 
           case "object":
-            return module.objects[index];
+            return getTableEntry(module.objects, index);
 
           default:
             throw new Error("unexpected");            
@@ -205,11 +216,10 @@
         // FIXME: partitioning
         var index = reader.readIndex();
 
-        if (index === 0xFFFFFFFF)
-          return null;
-
-        return module.objects[index];
+        return getTableEntry(module.objects, index);
     }
+
+    throw new Error("unexpected");
   };
 
 
@@ -292,9 +302,12 @@
       table = module.objects;
     }
 
+    if (count !== table.length)
+      throw new Error("Read " + count + " object(s) into table of length " + table.length);
+
     for (var i = 0; i < count; i++) {
       var obj = table[i];
-      deserializeObjectContents(reader, module, table, obj);
+      deserializeObjectContents(reader, module, obj);
     }
   };
 
@@ -304,7 +317,9 @@
     for (var i = 0; i < count; i++) {
       // TODO: Pre-allocate with known shape for better perf
       var o = new Object();
-      o.type = shapeName;
+
+      if (shapeName !== "Object")
+        o.type = shapeName;
 
       table[i] = o;
     };
@@ -336,9 +351,6 @@
     }
 
     var result = new JsAstModule(shapes);
-
-    result.rootType  = reader.readUtf8String();
-    result.rootIndex = reader.readUint32();
 
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
@@ -395,12 +407,21 @@
     deserializeArrays(reader, result);
     console.timeEnd("  read arrays");
 
+    try {
+      result.root = deserializeValueWithKnownTag(reader, result, "any");
+      if (!result.root)
+        throw new Error("Failed to retrieve root from module");
+    } catch (err) {
+      console.log(result.objects.length, result.arrays.length);
+      throw err;
+    }
+
     return result;
   };
 
 
   function moduleToAst (module) {
-    return module.objects[module.rootIndex];
+    return module.root;
   };
 
   exports.PrettyJson    = common.PrettyJson;

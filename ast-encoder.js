@@ -17,7 +17,6 @@
       ObjectTable = common.ObjectTable,
       GetObjectId = common.GetObjectId;
 
-
   function ValueWriter () {
     // HACK: Max size 32mb because growable buffers are effort
     var maxSize = (1024 * 1024) * 32;
@@ -151,9 +150,6 @@
       this.objects = new ObjectTable("Object");
       this.objectTableCount = 1;
     }
-
-    this.rootType = null;
-    this.rootId = null;
 
     this.anyTypeValuesWritten = 0;
 
@@ -533,7 +529,7 @@
     this.arrays .finalize(0);
 
     this.forEachObjectTable(function (table) {
-      table.finalize(true);
+      table.finalize(0);
     });
   };
 
@@ -588,6 +584,10 @@
         walkCallback(array, i, array[i]);
     };
 
+    var rootTag = result.getTypeTagForValue(root);
+    var rootTable = result.getTableForTypeTag(rootTag);
+    rootTable.add(root);
+
     astutil.mutate(root, function visit (context, node) {
       if (!node)
         return;
@@ -607,13 +607,7 @@
       }
     });
 
-    // HACK
-    var rootShape = result.getShapeForObject(root);
-    var rootTable = result.getObjectTable(root);
-    rootTable.add(root);
-
-    result.rootType = root.type;
-    result.rootId   = rootTable.get_id(root);
+    result.root = root;
 
     return result;
   };
@@ -631,9 +625,6 @@
     */
 
     module.finalize();
-
-    writer.writeUtf8String(module.rootType);
-    writer.writeUint32(module.rootId.get_index());
 
     // We write out the lengths in advance of the (length-prefixed) tables.
     // This allows a decoder to preallocate space for all the tables and
@@ -668,6 +659,8 @@
     });
     
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
+
+    module.serializeValueWithKnownTag(writer, module.root, "any");
 
     console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);

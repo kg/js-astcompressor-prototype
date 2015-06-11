@@ -275,10 +275,10 @@
       return result;
 
     for (i = 0; i < result.length; i++) {
-      if (LogTables)
-        console.log(this.semantic, result[i].get_name(), result[i].entry.hitCount);
-
       result[i].entry.index = baseIndex + i;
+
+      if (LogTables)
+        console.log(this.semantic, result[i].get_name(), result[i].entry.hitCount, result[i].entry.index);
     }
 
     this.isFinalized = true;
@@ -522,7 +522,7 @@
   exports.EnableVarints           = true;
   exports.PartitionedObjectTables = false;
 
-  exports.PrettyJson = false;
+  exports.PrettyJson              = true;
 
   exports.ShapeDefinition = ShapeDefinition;
 
