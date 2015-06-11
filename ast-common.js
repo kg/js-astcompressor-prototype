@@ -525,14 +525,14 @@
   // Partition objects into individual tables and index spaces by
   //  their statically known types.
   // Fields without statically known types have type info emitted.
-  exports.PartitionedObjectTables = true;
+  exports.PartitionedObjectTables = false;
 
   // When using partitioned tables, instead of writing type tags,
   //  all objects have (larger) indices into a global index space.
   // This produces indices that are larger (LEB) but in best case
   //  they are smaller than a tag + local index pair.
   exports.GlobalIndexSpace        = false;
-  
+
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is
   //  super busted for large objects.

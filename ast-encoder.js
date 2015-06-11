@@ -552,7 +552,7 @@
     }
 
     try {
-      if (table.semantic !== actualValueTag)
+      if ((table.semantic !== actualValueTag) && common.PartitionedObjectTables)
         throw new Error("Wrong table: " + table.semantic + " !== " + actualValueTag);
 
       var index = table.get_index(value);
