@@ -155,6 +155,9 @@
 
 
   function getTableEntry (table, index) {
+    if (!table)
+      throw new Error("Table expected");
+
     if (index === 0xFFFFFFFF)
       return null;
 
@@ -170,6 +173,8 @@
 
 
   function deserializeValueWithKnownTag (reader, module, tag) {
+    console.log("read ", tag);
+
     switch (tag) {
       case "any": {
         tag = readTypeTag(reader, module);
@@ -180,24 +185,33 @@
       }
 
       case "string":
-      case "array":
-      case "object": {
         var index = reader.readIndex();
+        return getTableEntry(module.strings, index);
 
-        switch (tag) {
-          case "string":
-            return getTableEntry(module.strings, index);
+      case "array":
+        var index = reader.readIndex();
+        return getTableEntry(module.arrays, index);
 
-          case "array":
-            return getTableEntry(module.arrays, index);
-
-          case "object":
-            return getTableEntry(module.objects, index);
-
-          default:
-            throw new Error("unexpected");            
+      case "object":
+        var objectTable;
+        if (common.PartitionedObjectTables) {
+          var tagIndex = reader.readIndex();
+          var actualTag = module.tags[tagIndex];
+          console.log("read  tag", tagIndex, actualTag);
+          if (typeof (actualTag) !== "string")
+            throw new Error("No tag with index " + tagIndex + " exists");
+          else if (actualTag === "object")
+            throw new Error("Actual tag of untyped object was 'object'.");
+          
+          objectTable = module.objectTables[actualTag];
+          if (!objectTable)
+            throw new Error("No object table for tag '" + actualTag + "'");
+        } else {
+          objectTable = module.objects;
         }
-      }
+
+        var index = reader.readIndex();
+        return getTableEntry(objectTable, index);
 
       case "boolean":
         return Boolean(reader.readByte());
@@ -213,10 +227,18 @@
         if (!shape)
           throw new Error("Unhandled value type " + tag + " with no shape");
 
-        // FIXME: partitioning
         var index = reader.readIndex();
 
-        return getTableEntry(module.objects, index);
+        var objectTable;
+        if (common.PartitionedObjectTables) {
+          objectTable = module.objectTables[tag];
+          if (!objectTable)
+            throw new Error("No object table for tag '" + tag + "'");
+        } else {
+          objectTable = module.objects;
+        }
+
+        return getTableEntry(objectTable, index);
     }
 
     throw new Error("unexpected");
@@ -288,14 +310,14 @@
   };
 
 
-  function deserializeObjectTable (reader, module, tagByte) {
+  function deserializeObjectTable (reader, module, tag) {
     var count = reader.readUint32();
     if (count === false)
       throw new Error("Truncated file");
 
     var table;
     if (common.PartitionedObjectTables) {
-      table = module.objectTables[tagByte];
+      table = module.objectTables[tag];
       if (!table)
         throw new Error("Table not found");
     } else {
@@ -312,20 +334,20 @@
   };
 
 
-  function allocateObjectTable (module, tagByte, shapeName, count) {
+  function allocateObjectTable (module, shapeName, count) {
     var table = new Array(count);
     for (var i = 0; i < count; i++) {
       // TODO: Pre-allocate with known shape for better perf
       var o = new Object();
 
-      if (shapeName !== "Object")
+      if (shapeName !== "object")
         o.type = shapeName;
 
       table[i] = o;
     };
 
     if (common.PartitionedObjectTables) {
-      module.objectTables[tagByte] = table;
+      module.objectTables[shapeName] = table;
     } else {
       if (module.objects)
         throw new Error("Object table already allocated");
@@ -375,11 +397,14 @@
     var objectTableCount = reader.readUint32();
     var objectTableNames = new Array(objectTableCount);
 
+    var tagIndices = new Array(objectTableCount);
+
     for (var i = 0; i < objectTableCount; i++) {
-      var tableType = objectTableNames[i] = reader.readUtf8String();
+      var tagIndex = tagIndices[i] = reader.readUint32();
+      var tag = result.tags[tagIndex];
       var tableCount = reader.readUint32();
 
-      allocateObjectTable(result, i, tableType, tableCount);
+      allocateObjectTable(result, tag, tableCount);
     }
     console.timeEnd("  read object table directory");
 
@@ -399,7 +424,9 @@
 
     console.time("  read objects");
     for (var i = 0; i < objectTableCount; i++) {
-      deserializeObjectTable(reader, result, i);
+      var tagIndex = tagIndices[i];
+      var tag = result.tags[tagIndex];
+      deserializeObjectTable(reader, result, tag);
     }
     console.timeEnd("  read objects");
 
@@ -407,14 +434,9 @@
     deserializeArrays(reader, result);
     console.timeEnd("  read arrays");
 
-    try {
-      result.root = deserializeValueWithKnownTag(reader, result, "any");
-      if (!result.root)
-        throw new Error("Failed to retrieve root from module");
-    } catch (err) {
-      console.log(result.objects.length, result.arrays.length);
-      throw err;
-    }
+    result.root = deserializeValueWithKnownTag(reader, result, "any");
+    if (!result.root)
+      throw new Error("Failed to retrieve root from module");
 
     return result;
   };

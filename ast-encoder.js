@@ -196,7 +196,7 @@
       for (var k in this.objectTables)
         callback(this.objectTables[k], k);
     } else {
-      callback(this.objects, "Object");
+      callback(this.objects, "object");
     }
   };
 
@@ -312,7 +312,10 @@
 
     if (typeof (shapeName) !== "string") {
       // HACK so js RegExp instances can fit into this shape model
-      if (Object.getPrototypeOf(obj) === RegExp.prototype)
+      if (
+        (typeof (obj) === "object") &&
+        (Object.getPrototypeOf(obj) === RegExp.prototype)
+      )
         shapeName = "RegExp";
       else
         throw new Error("Unsupported object " + obj + " with shape name " + JSON.stringify(shapeName))
@@ -410,7 +413,10 @@
   };
 
 
-  JsAstModule.prototype.getTableForTypeTag = function (tag) {
+  JsAstModule.prototype.getTableForTypeTag = function (tag, actualValueTag) {
+    if (actualValueTag === "null")
+      return null;
+
     if (tag === "string")
       return this.strings;
     else if (tag === "array")
@@ -420,9 +426,20 @@
       if (shape) {
         return this.getObjectTable(shape);
       } else if (tag === "object") {
-        if (common.PartitionedObjectTables)
-          throw new Error("Invalid abstract-tagged object");
-        else
+        if (common.PartitionedObjectTables) {
+          if (
+            actualValueTag && 
+            (actualValueTag !== "object")
+          ) {
+            var actualShape = this.shapes.get(actualValueTag);
+            if (actualShape)
+              return this.getObjectTable(actualShape);
+            else
+              throw new Error("Abstract-tagged object with value tag that has no shape: " + actualValueTag);
+          } else {
+            throw new Error("Invalid abstract-tagged object and no value tag provided");
+          }
+        } else
           return this.getObjectTable("object");
       } else {
         return null;
@@ -433,6 +450,8 @@
 
   // Or unknown tag, if you pass 'any', because why not.
   JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag) {
+    console.log("write", tag);
+
     switch (tag) {
       case "true":
       case "false":
@@ -471,19 +490,37 @@
         break;
     }
 
-    var table = this.getTableForTypeTag(tag);
+    if (value === null) {
+      writer.writeIndex(0xFFFFFFFF);
+      return;
+    }
+
+    var actualValueTag = this.getTypeTagForValue(value);
+    var table = this.getTableForTypeTag(tag, actualValueTag);
     if (!table)
       throw new Error("No table for value with tag '" + tag + "'");
 
+    var isUntypedObject = (tag === "object");
+
     try {
-      var index;
+      var index = table.get_index(value);
 
-      if (value === null)
-        index = 0xFFFFFFFF;
-      else      
-        index = table.get_index(value);
+      // For objects where the exact shape is unknown, in partitioned mode
+      //  we need to distinguish between types, either with a global index
+      //  space or with a type tag.
+      if (isUntypedObject && common.PartitionedObjectTables) {
+        // TODO: Encode using global index space instead to make best-case size still one byte.
+        this.anyTypeValuesWritten += 1;
+        var tagIndex = this.getIndexForTypeTag(actualValueTag);
+        console.log("write tag", tagIndex, actualValueTag);
+        writer.writeIndex(tagIndex);
+        writer.writeIndex(index);
+      } else {
+        // There's only one global object table, so we can encode everything
+        //  as a single index.
+        writer.writeIndex(index);
+      }
 
-      writer.writeIndex(index);
     } catch (err) {
       console.log("Failed while writing '" + tag + "'", value);
       throw err;
@@ -648,7 +685,7 @@
 
     module.forEachObjectTable(function (table, key) {
       // FIXME: Tag index instead? Implied tag index by order?
-      writer.writeUtf8String(key);
+      writer.writeUint32(module.tags.get_index(key));      
       writer.writeUint32(table.get_count());
     });
 
