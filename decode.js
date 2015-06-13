@@ -43,6 +43,9 @@ console.timeEnd("moduleToAst");
 
 console.log("heapUsed " + process.memoryUsage().heapUsed);
 
+if (true)
+  astutil.assertNoCycles(outputAst);
+
 if (outputAstFile) {
   var json;
   if (astDecoder.PrettyJson)

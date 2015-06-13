@@ -622,8 +622,11 @@
     this.strings.finalize(0);
     this.arrays .finalize(0);
 
+    var globalBaseIndex = 0;
     this.forEachObjectTable(function (table) {
+      table.globalBaseIndex = globalBaseIndex;
       table.finalize(0);
+      globalBaseIndex += table.get_count();
     });
   };
 
@@ -739,8 +742,13 @@
 
     module.forEachObjectTable(function (table, key) {
       // FIXME: Tag index instead? Implied tag index by order?
-      writer.writeUint32(module.tags.get_index(key));      
+      writer.writeUint32(module.tags.get_index(key));
       writer.writeUint32(table.get_count());
+
+      // If global index spaces are in use, we write the base
+      //  index here so that the decoder knows it early.
+      if (common.GlobalIndexSpace)
+        writer.writeUint32(table.globalBaseIndex);
     });
 
     module.serializeTable(writer, module.strings, true, function (writer, value) {

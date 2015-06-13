@@ -186,6 +186,25 @@
   };
 
 
+  function getTableEntryForGlobalIndex (module, index) {
+    if (index === 0xFFFFFFFF)
+      return null;
+
+    // FIXME: Slow and awful
+
+    for (var k in module.objectTables) {
+      var table = module.objectTables[k];
+      var firstIndex = table.baseIndex;
+      var lastIndex = firstIndex + table.length - 1;
+
+      if ((index >= firstIndex) && (index <= lastIndex))
+        return table[index - firstIndex];
+    }
+
+    throw new Error("No table found for global index " + index);
+  };
+
+
   function deserializeValueWithKnownTag (reader, module, tag) {
     switch (tag) {
       case "any": {
@@ -213,25 +232,29 @@
       case "object":
         var objectTable;
         if (common.PartitionedObjectTables) {
-          if (common.GlobalIndexSpace)
-            throw new Error("NYI");
+          if (common.GlobalIndexSpace) {
+            var globalIndex = reader.readIndex();
 
-          var tagIndex = reader.readIndex();
-          if (tagIndex === 0xFFFFFFFF)
-            return null;
+            var result = getTableEntryForGlobalIndex(module, globalIndex);
+            return result;
+          } else {
+            var tagIndex = reader.readIndex();
+            if (tagIndex === 0xFFFFFFFF)
+              return null;
 
-          var actualTag = module.tags[tagIndex];
-          if (typeof (actualTag) !== "string")
-            throw new Error("No tag with index " + tagIndex + " exists");
-          else if (actualTag === "object")
-            throw new Error("Actual tag of untyped object was 'object'.");
-          
-          if (IoTrace)
-            console.log("read  object -> " + actualTag);
+            var actualTag = module.tags[tagIndex];
+            if (typeof (actualTag) !== "string")
+              throw new Error("No tag with index " + tagIndex + " exists");
+            else if (actualTag === "object")
+              throw new Error("Actual tag of untyped object was 'object'.");
+            
+            if (IoTrace)
+              console.log("read  object -> " + actualTag);
 
-          objectTable = module.objectTables[actualTag];
-          if (!objectTable)
-            throw new Error("No object table for tag '" + actualTag + "'");
+            objectTable = module.objectTables[actualTag];
+            if (!objectTable)
+              throw new Error("No object table for tag '" + actualTag + "'");
+          }
         } else {
           if (IoTrace)
             console.log("read  object");
@@ -260,8 +283,9 @@
 
         var objectTable;
         if (common.PartitionedObjectTables) {
-          if (common.GlobalIndexSpace)
-            throw new Error("NYI");
+          if (common.GlobalIndexSpace) {
+            return getTableEntryForGlobalIndex(module, index);
+          }
 
           objectTable = module.objectTables[tag];
           if (!objectTable)
@@ -379,7 +403,7 @@
   };
 
 
-  function allocateObjectTable (module, shapeName, count) {
+  function allocateObjectTable (module, shapeName, count, baseIndex) {
     var table = new Array(count);
     for (var i = 0; i < count; i++) {
       // TODO: Pre-allocate with known shape for better perf
@@ -390,6 +414,8 @@
 
       table[i] = o;
     };
+
+    table.baseIndex = baseIndex;
 
     if (common.PartitionedObjectTables) {
       module.objectTables[shapeName] = table;
@@ -448,8 +474,12 @@
       var tagIndex = tagIndices[i] = reader.readUint32();
       var tag = result.tags[tagIndex];
       var tableCount = reader.readUint32();
+      var baseIndex = 0;
 
-      allocateObjectTable(result, tag, tableCount);
+      if (common.GlobalIndexSpace)
+        baseIndex = reader.readUint32();
+
+      allocateObjectTable(result, tag, tableCount, baseIndex);
     }
     console.timeEnd("  read object table directory");
 

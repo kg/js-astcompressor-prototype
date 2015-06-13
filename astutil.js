@@ -61,7 +61,9 @@ astutil.mutate = function (root, mutator, context) {
     context.stack.push(root);
 
     try {
-        var newRoot = mutator(context, root);
+        var newRoot = root;
+        if (mutator)
+            newRoot = mutator(context, root);
         if (typeof (newRoot) === "undefined")
             newRoot = root;
 
@@ -119,4 +121,15 @@ astutil.find = function (root, predicate) {
     });
 
     return result;
+};
+
+astutil.assertNoCycles = function (root) {
+    var context = new astutil.Context();
+    context.onCycleDetected = function (target) {
+        console.log(context.stack.map(function (n) { return n.type; }));
+        console.log("Cycle pointing at", target);
+        throw new Error("Cycle detected in AST");
+    };
+
+    astutil.mutate(root, null, context);
 };
