@@ -561,11 +561,15 @@
       //  we need to distinguish between types, either with a global index
       //  space or with a type tag.
       if (isUntypedObject && common.PartitionedObjectTables) {
-        // TODO: Encode using global index space instead to make best-case size still one byte.
-        this.anyTypeValuesWritten += 1;
-        var tagIndex = this.getIndexForTypeTag(actualValueTag);
-        writer.writeIndex(tagIndex);
-        writer.writeIndex(index);
+        if (common.GlobalIndexSpace) {
+          var globalIndex = table.get_global_index(value);
+          writer.writeIndex(globalIndex);
+        } else {
+          this.anyTypeValuesWritten += 1;
+          var tagIndex = this.getIndexForTypeTag(actualValueTag);
+          writer.writeIndex(tagIndex);
+          writer.writeIndex(index);
+        }
       } else {
         // There's only one global object table, so we can encode everything
         //  as a single index.

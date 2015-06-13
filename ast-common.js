@@ -12,12 +12,11 @@
   var LogTables = false;
 
 
-  function NamedTableId (entry, semantic) {
+  function NamedTableId (entry) {
     if (!entry)
       throw new Error("Id must have an entry");
 
     this.entry = entry;
-    this.semantic = semantic;
     this.isRedirected = false;
   };
 
@@ -68,7 +67,7 @@
   NamedTableId.prototype.get_semantic = function () {
     this.checkInvariants();
 
-    return this.semantic;
+    return this.entry.table.semantic;
   };
 
   NamedTableId.prototype.get_name = function () {
@@ -89,12 +88,19 @@
     return this.entry.index;
   };
 
+  NamedTableId.prototype.get_global_index = function () {
+    this.checkInvariants();
+
+    if (typeof (this.entry.table.globalBaseIndex) !== "number")
+      throw new Error("No base index assigned to table " + this.entry.table.semantic);
+
+    return this.entry.table.globalBaseIndex + this.entry.index;
+  };
+
   NamedTableId.prototype.toString = function () {
     var index = this.get_index();
     var name = this.get_name();
-    var prefix = "<#";
-    if (this.semantic)
-      prefix = "<" + this.semantic + " #";
+    var prefix = "<" + this.entry.table.semantic + " #";
 
     if (typeof (index) !== "number")
       index = "?";
@@ -104,25 +110,18 @@
       return prefix + index + " '" + name + "'>";
   }
 
-  NamedTableId.prototype.valueOf = function () {
-    this.checkInvariants();
 
-    var index = this.get_index();
-    if (typeof (index) !== "number")
-      throw new Error("No index assigned yet");
+  function NamedTableEntry (name, value, table) {
+    this.table = table;
 
-    return index;
-  }
-
-
-  function NamedTableEntry (name, value, semantic) {
     this.name = name;
     this.value = value;
-    this.id = new NamedTableId(this, semantic);
     this.index = undefined;
     this.hitCount = 1;
     this.isInvalidated = false;
     this.dedupedIds = null;
+
+    this.id = new NamedTableId(this);
   };
 
 
@@ -134,6 +133,7 @@
     this.count = 0;
     this.semantic = semantic;
     this.isFinalized = false;
+    this.globalBaseIndex = null;
   };
 
   NamedTable.prototype.add = function (name, value, throwOnDivergence) {
@@ -153,7 +153,7 @@
       return existing.id;
     }
 
-    var entry = new NamedTableEntry(name, value, this.semantic);
+    var entry = new NamedTableEntry(name, value, this);
     this.count++;
     this.entries[name] = entry;
     return entry.id;
@@ -188,6 +188,13 @@
     } else {
       throw new Error("No '" + this.semantic + "' table entry for '" + name + "'");
     }
+  }
+
+  NamedTable.prototype.get_global_index = function (name) {
+    if (typeof (this.globalBaseIndex) !== "number")
+      throw new Error("No base index set");
+
+    return this.get_index(name) + this.globalBaseIndex;
   }
 
   NamedTable.prototype.get_count = function () {
@@ -229,9 +236,9 @@
     else if (!targetEntry)
       throw new Error("target must exist");
 
-    if (sourceEntry.id.semantic !== this.semantic)
+    if (sourceEntry.table !== this)
       throw new Error("source is from the wrong table");
-    else if (targetEntry.id.semantic !== this.semantic)
+    else if (targetEntry.table !== this)
       throw new Error("target is from the wrong table");
 
     // Invalidate the entry.
@@ -289,6 +296,10 @@
     this.isFinalized = true;
 
     return result;
+  };
+
+  NamedTable.prototype.setGlobalBaseIndex = function (value) {
+    this.globalBaseIndex = value | 0;
   };
 
 
@@ -525,7 +536,7 @@
   // Partition objects into individual tables and index spaces by
   //  their statically known types.
   // Fields without statically known types have type info emitted.
-  exports.PartitionedObjectTables = false;
+  exports.PartitionedObjectTables = true;
 
   // When using partitioned tables, instead of writing type tags,
   //  all objects have (larger) indices into a global index space.

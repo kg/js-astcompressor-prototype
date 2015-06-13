@@ -213,6 +213,9 @@
       case "object":
         var objectTable;
         if (common.PartitionedObjectTables) {
+          if (common.GlobalIndexSpace)
+            throw new Error("NYI");
+
           var tagIndex = reader.readIndex();
           if (tagIndex === 0xFFFFFFFF)
             return null;
@@ -257,6 +260,9 @@
 
         var objectTable;
         if (common.PartitionedObjectTables) {
+          if (common.GlobalIndexSpace)
+            throw new Error("NYI");
+
           objectTable = module.objectTables[tag];
           if (!objectTable)
             throw new Error("No object table for tag '" + tag + "'");
