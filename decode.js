@@ -2,7 +2,7 @@
 
 require('./astutil.js');
 require('./node-augh.js');
-require('./Upstream/encoding/encoding.js');
+require('./third_party/encoding/encoding.js');
 
 var astDecoder = require('./ast-decoder.js');
 var fs = require('fs');
