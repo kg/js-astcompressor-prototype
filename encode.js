@@ -4,6 +4,7 @@ require('./astutil.js');
 require('./node-augh.js');
 require('./Upstream/encoding/encoding.js');
 
+var common = require("./ast-common.js");
 var asmParse = require('./parse/asm-parse.js');
 var astEncoder = require('./ast-encoder.js');
 var fs = require('fs');
@@ -25,22 +26,27 @@ var shapes = astEncoder.ShapeTable.fromJson(
 var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
-if (false) {
-  console.time("asm-tokenize");
-  var inputReader = encoding.makeCharacterReader(inputJs);
-  var tokenizer = new asmParse.Tokenizer(inputReader);
-
-  var token;
-  while ((token = tokenizer.read()) !== false) {
-    ;
-  }
-
-  console.timeEnd("asm-tokenize");
-  process.exit(1);
-}
-
 var inputReader = encoding.makeCharacterReader(inputJs);
 var astBuilder = new asmParse.TreeBuilder.AsmlikeJSON();
+
+if (true) {
+  var configuration = Object.create(null);
+  var omittedKeys = ["Magic", "TagIsPrimitive"];
+
+  for (var k in common) {
+    if (omittedKeys.indexOf(k) >= 0)
+      continue;
+    else if (
+      (typeof (common[k]) === "object") ||
+      (typeof (common[k]) === "function")
+    )
+      continue;
+
+    configuration[k] = common[k];
+  }
+
+  console.log(JSON.stringify(configuration, null, 2));
+}
 
 console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);

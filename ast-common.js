@@ -117,6 +117,7 @@
     this.name = name;
     this.value = value;
     this.index = undefined;
+    this.order = undefined;
     this.hitCount = 1;
     this.isInvalidated = false;
     this.dedupedIds = null;
@@ -131,6 +132,7 @@
 
     this.entries = Object.create(null);
     this.count = 0;
+    this.nextOrder = 0;
     this.semantic = semantic;
     this.isFinalized = false;
     this.globalBaseIndex = null;
@@ -154,6 +156,8 @@
     }
 
     var entry = new NamedTableEntry(name, value, this);
+    entry.order = this.nextOrder++;
+
     this.count++;
     this.entries[name] = entry;
     return entry.id;
@@ -276,12 +280,65 @@
     if (i !== this.count)
       throw new Error("Count mismatch");
 
-    result.sort(function (lhs, rhs) {
-      var lhsHitCount = lhs.entry.hitCount;
-      var rhsHitCount = rhs.entry.hitCount;
+    if (exports.SortTables) {
+      // First pass: sort by usage count so most frequently
+      //  used objects have low (small) indices.
+      var hitCountPredicate = function (lhs, rhs) {
+        return (rhs.entry.hitCount - lhs.entry.hitCount);
+      };
 
-      return (rhsHitCount - lhsHitCount);
-    });
+      result.sort(hitCountPredicate);
+
+      if (exports.LocalityAwareSorting) {
+        // Second pass: Sort objects below a usage count threshold
+        //  by their ordering in the source file to increase locality.
+
+        var isLargeTable =
+          this.count >= exports.LargeTableThreshold;
+
+        var cutoff =
+          isLargeTable
+            ? exports.LocalityCutoffLarge
+            : exports.LocalityCutoffSmall;
+
+        var thresholdIndex = Math.min(
+          this.count - 1,
+          cutoff - 1
+        );
+
+        var hitCountThreshold = result[thresholdIndex].entry.hitCount;
+        if (hitCountThreshold < exports.LocalityMinimumThreshold)
+          hitCountThreshold = exports.LocalityMinimumThreshold;
+
+        var orderPredicate = function (lhs, rhs) {
+          return (lhs.entry.order - rhs.entry.order);
+        };
+
+        result.sort(function (lhs, rhs) {
+          var lhsBelowThreshold = lhs.entry.hitCount < hitCountThreshold;
+          var rhsBelowThreshold = rhs.entry.hitCount < hitCountThreshold;
+
+          if (lhsBelowThreshold && rhsBelowThreshold)
+            return orderPredicate(lhs, rhs);
+          else if (lhsBelowThreshold)
+            return 1;
+          else if (rhsBelowThreshold)
+            return -1;
+          else
+            return hitCountPredicate(lhs, rhs);
+        });
+
+        if (this.semantic === "object") {
+          console.log("object table threshold (index=" + cutoff + ") = " + hitCountThreshold);
+
+          if (false) {
+            for (var i = 0; i < result.length; i++) {
+              console.log(i, result[i].entry.hitCount, result[i].entry.order);
+            }
+          }
+        } 
+      }
+    }
 
     if (this.isFinalized)
       return result;
@@ -533,10 +590,24 @@
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
   exports.EnableVarints            = true;
 
+  // Sorts the object table to reduce the average size of varints,
+  //  and potentially improve stream compression in general.
+  exports.SortTables               = true;
   // Two-pass object table sort. Highest frequency use objects
   //  at the front of the table, then lower frequency use objects
   //  sorted sequentially to improve locality (and compression?)
   exports.LocalityAwareSorting     = true;
+  // Tables over this size use the larger locality cutoff.
+  // Roughly, we want to use this as a heuristic for cases
+  //  where indexes would otherwise frequently be 3 bytes
+  //  and hitcount sorting can reduce them to 2.
+  exports.LargeTableThreshold      = 1 << 13;
+  // How many items at the front of the table (hitcount sorted)
+  // Small is used for 'small' tables (see above), large etc
+  exports.LocalityCutoffSmall      = 128;
+  exports.LocalityCutoffLarge      = 1 << 13;
+  // How low can the minimum hitcount be
+  exports.LocalityMinimumThreshold = 3;
 
   // Partition objects into individual object streams based on type.
   // They still share a global index space.
