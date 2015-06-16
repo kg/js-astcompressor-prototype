@@ -134,17 +134,7 @@
     this.strings = null;
     this.arrays  = null;
 
-    if (common.PartitionedObjectTables) {
-      this.objectTables = Object.create(null);
-
-      Object.defineProperty(this, "objects", {
-        configurable: false,
-        enumerable: false,
-        get: function () { throw new Error("module.objects not available in partitioned tables mode"); }
-      });
-    } else {
-      this.objects = null;
-    }
+    this.objects = null;
 
     this.root = null;
   };
@@ -231,36 +221,10 @@
 
       case "object":
         var objectTable;
-        if (common.PartitionedObjectTables) {
-          if (common.GlobalIndexSpace) {
-            var globalIndex = reader.readIndex();
+        if (IoTrace)
+          console.log("read  object");
 
-            var result = getTableEntryForGlobalIndex(module, globalIndex);
-            return result;
-          } else {
-            var tagIndex = reader.readIndex();
-            if (tagIndex === 0xFFFFFFFF)
-              return null;
-
-            var actualTag = module.tags[tagIndex];
-            if (typeof (actualTag) !== "string")
-              throw new Error("No tag with index " + tagIndex + " exists");
-            else if (actualTag === "object")
-              throw new Error("Actual tag of untyped object was 'object'.");
-            
-            if (IoTrace)
-              console.log("read  object -> " + actualTag);
-
-            objectTable = module.objectTables[actualTag];
-            if (!objectTable)
-              throw new Error("No object table for tag '" + actualTag + "'");
-          }
-        } else {
-          if (IoTrace)
-            console.log("read  object");
-
-          objectTable = module.objects;
-        }
+        objectTable = module.objects;
 
         var index = reader.readIndex();
         return getTableEntry(objectTable, index);
@@ -282,17 +246,7 @@
         var index = reader.readIndex();
 
         var objectTable;
-        if (common.PartitionedObjectTables) {
-          if (common.GlobalIndexSpace) {
-            return getTableEntryForGlobalIndex(module, index);
-          }
-
-          objectTable = module.objectTables[tag];
-          if (!objectTable)
-            throw new Error("No object table for tag '" + tag + "'");
-        } else {
-          objectTable = module.objects;
-        }
+        objectTable = module.objects;
 
         return getTableEntry(objectTable, index);
     }
@@ -380,18 +334,7 @@
     if (count === false)
       throw new Error("Truncated file");
 
-    var table;
-    if (common.PartitionedObjectTables) {
-      // IoTrace = (tag === "IfStatement");
-      if (IoTrace)
-        console.log("// table " + tag);
-
-      table = module.objectTables[tag];
-      if (!table)
-        throw new Error("Table not found");
-    } else {
-      table = module.objects;
-    }
+    var table = module.objects;
 
     if (count !== table.length)
       throw new Error("Read " + count + " object(s) into table of length " + table.length);
@@ -417,14 +360,10 @@
 
     table.baseIndex = baseIndex;
 
-    if (common.PartitionedObjectTables) {
-      module.objectTables[shapeName] = table;
-    } else {
-      if (module.objects)
-        throw new Error("Object table already allocated");
-      else
-        module.objects = table;
-    }
+    if (module.objects)
+      throw new Error("Object table already allocated");
+    else
+      module.objects = table;
   };
 
 

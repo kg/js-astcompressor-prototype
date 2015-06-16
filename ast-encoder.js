@@ -152,18 +152,8 @@
     this.tags.add("any");
     this.tags.add("object");
 
-    if (common.PartitionedObjectTables) {
-      this.objectTables = Object.create(null);
-      this.objectTableCount = 0;
-      Object.defineProperty(this, "objects", {
-        configurable: false,
-        enumerable: false,
-        get: function () { throw new Error("module.objects not available in partitioned tables mode"); }
-      });
-    } else {
-      this.objects = new ObjectTable("object");
-      this.objectTableCount = 1;
-    }
+    this.objects = new ObjectTable("object");
+    this.objectTableCount = 1;
 
     this.anyTypeValuesWritten = 0;
 
@@ -175,41 +165,12 @@
     if (nodeOrShape === null)
       return null;
 
-    if (common.PartitionedObjectTables) {
-      var shape;
-
-      if (nodeOrShape instanceof common.ShapeDefinition) {
-        shape = nodeOrShape;
-      } else {
-        var temp = this.getShapeForObject(nodeOrShape);
-
-        if (!temp)
-          throw new Error("Expected either a ShapeDefinition or a node with a type");
-
-        shape = temp.shape;
-      }
-
-      var table = this.objectTables[shape.key];
-
-      if (!table) {
-        table = this.objectTables[shape.key] = new ObjectTable(shape.key);
-        this.objectTableCount += 1;
-      }
-
-      return table;
-    } else {
-      return this.objects;
-    }
+    return this.objects;
   };
 
 
   JsAstModule.prototype.forEachObjectTable = function (callback) {
-    if (common.PartitionedObjectTables) {
-      for (var k in this.objectTables)
-        callback(this.objectTables[k], k);
-    } else {
-      callback(this.objects, "object");
-    }
+    callback(this.objects, "object");
   };
 
 
@@ -464,21 +425,7 @@
       if (shape) {
         return this.getObjectTable(shape);
       } else if (tag === "object") {
-        if (common.PartitionedObjectTables) {
-          if (
-            actualValueTag && 
-            (actualValueTag !== "object")
-          ) {
-            var actualShape = this.shapes.get(actualValueTag);
-            if (actualShape)
-              return this.getObjectTable(actualShape);
-            else
-              throw new Error("Abstract-tagged object with value tag that has no shape: " + actualValueTag);
-          } else {
-            throw new Error("Invalid abstract-tagged object and no value tag provided");
-          }
-        } else
-          return this.getObjectTable("object");
+        return this.getObjectTable("object");
       } else {
         return null;
       }
@@ -552,30 +499,11 @@
     }
 
     try {
-      if ((table.semantic !== actualValueTag) && common.PartitionedObjectTables)
-        throw new Error("Wrong table: " + table.semantic + " !== " + actualValueTag);
-
       var index = table.get_index(value);
 
-      // For objects where the exact shape is unknown, in partitioned mode
-      //  we need to distinguish between types, either with a global index
-      //  space or with a type tag.
-      if (isUntypedObject && common.PartitionedObjectTables) {
-        if (common.GlobalIndexSpace) {
-          var globalIndex = table.get_global_index(value);
-          writer.writeIndex(globalIndex);
-        } else {
-          this.anyTypeValuesWritten += 1;
-          var tagIndex = this.getIndexForTypeTag(actualValueTag);
-          writer.writeIndex(tagIndex);
-          writer.writeIndex(index);
-        }
-      } else {
-        // There's only one global object table, so we can encode everything
-        //  as a single index.
-        writer.writeIndex(index);
-      }
-
+      // There's only one global object table, so we can encode everything
+      //  as a single index.
+      writer.writeIndex(index);
     } catch (err) {
       console.log("Failed while writing '" + tag + "'", value);
       throw err;

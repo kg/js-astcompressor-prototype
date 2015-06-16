@@ -528,30 +528,26 @@
     "boolean": true
   };
 
-  exports.FormatName              = "asmparse-jsontreebuilder-compressed-v2";
+  exports.FormatName               = "asmparse-jsontreebuilder-compressed-v2";
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints           = true;
+  exports.EnableVarints            = true;
 
-  // Partition objects into individual tables and index spaces by
-  //  their statically known types.
-  // Fields without statically known types have type info emitted.
-  exports.PartitionedObjectTables = true;
+  // Two-pass object table sort. Highest frequency use objects
+  //  at the front of the table, then lower frequency use objects
+  //  sorted sequentially to improve locality (and compression?)
+  exports.LocalityAwareSorting     = true;
 
-  // When using partitioned tables, instead of writing type tags,
-  //  all objects have (larger) indices into a global index space.
-  // This produces indices that are larger (LEB) but in best case
-  //  they are smaller than a tag + local index pair.
-  exports.GlobalIndexSpace        = false;
+  // Partition objects into individual object streams based on type.
+  // They still share a global index space.
+  // The indexes are encoded by a stream of type tags.
+  exports.PartitionedObjectStreams = false;
+
 
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is
   //  super busted for large objects.
-  exports.PrettyJson              = true;
-
-
-  if (!exports.PartitionedObjectTables)
-    exports.GlobalIndexSpace = false;
+  exports.PrettyJson              = false;
 
 
   exports.ShapeDefinition = ShapeDefinition;
