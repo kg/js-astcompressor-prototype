@@ -563,9 +563,53 @@
     return result;
   };
 
+  function writeLEBInt32 (byteWriter, value) {
+    var v = value;
+
+    var b = 0;
+    value |= 0;
+
+    do {
+      b = value & 0x7F;
+      value >>= 7;
+
+      var signBit = (b & 0x40) !== 0;
+
+      if (
+        ((value === 0) && !signBit) ||
+        ((value === -1) && signBit)
+      ) {
+        byteWriter.write(b);
+        break;
+      } else {
+        b |= 0x80;
+        byteWriter.write(b);
+      }
+    } while (true);
+  };
+
+  function readLEBInt32 (byteReader) {
+    var result = 0, shift = 0, b = 0;
+    while (true) {
+      b = byteReader.read() | 0;
+      var shifted = (b & 0x7F) << shift;
+      result |= shifted;
+      shift += 7;
+      
+      if ((b & 0x80) === 0)
+        break;
+    }
+
+    if (b & 0x40)
+      result |= (-1 << shift);
+
+    return result;
+  };
 
   exports.writeLEBUint32 = writeLEBUint32;
   exports.readLEBUint32  = readLEBUint32;
+  exports.writeLEBInt32 = writeLEBInt32;
+  exports.readLEBInt32  = readLEBInt32;
 
 
   exports.Magic = new Uint8Array([
@@ -609,10 +653,16 @@
   // How low can the minimum hitcount be
   exports.LocalityMinimumThreshold = 3;
 
+  // Encode indexes as signed values relative to the index of
+  //  the current object.
+  exports.RelativeIndexes          = false;
+
+  /*
   // Partition objects into individual object streams based on type.
   // They still share a global index space.
   // The indexes are encoded by a stream of type tags.
   exports.PartitionedObjectStreams = false;
+  */
 
 
   // Expected and decoded json ASTs are pretty printed.
