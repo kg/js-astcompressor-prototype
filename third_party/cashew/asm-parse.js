@@ -12,8 +12,8 @@
   }
 }(this, function (exports) {
   var tokenizer       = require("./asm-tokenizer.js");
-  var expressionChain = require("./asm-expressionchain.js");
-  var treeBuilder     = require("./treebuilder.js");
+  var expressionChain = require("../../parse/asm-expressionchain.js");
+  var treeBuilder     = require("../../parse/treebuilder.js");
 
   var Tokenizer       = tokenizer.Tokenizer;
   var ExpressionChain = expressionChain.ExpressionChain;

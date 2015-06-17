@@ -2,10 +2,10 @@
 
 require('./astutil.js');
 require('./node-augh.js');
-require('./Upstream/encoding/encoding.js');
+require('./third_party/encoding/encoding.js');
 
 var common = require("./ast-common.js");
-var asmParse = require('./parse/asm-parse.js');
+var asmParse = require('./third_party/cashew/asm-parse.js');
 var astEncoder = require('./ast-encoder.js');
 var fs = require('fs');
 
