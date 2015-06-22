@@ -190,7 +190,14 @@
     encoding.UTF8.encode(text, this);
   };
 
-  ValueWriter.prototype.writeSubstream = function (otherWriter) {
+  ValueWriter.prototype.writeSubstream = function (otherWriter, description) {
+    if (true) {
+      if (otherWriter.position > 1024)
+        console.log(description + ": " + (otherWriter.position / 1024).toFixed(1) + "kb");
+      else if (otherWriter.position)
+        console.log(description + ": " + otherWriter.position + "b");
+    }
+
     this.writeUint32(otherWriter.position);
 
     this.writeBytes(otherWriter.bytes, 0, otherWriter.position);
@@ -781,18 +788,18 @@
     var arrayWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(arrayWriter, module.arrays,  true,  module.serializeArray);
 
-    writer.writeSubstream(tagWriter);
-    writer.writeSubstream(stringWriter);
+    writer.writeSubstream(tagWriter, "tags");
+    writer.writeSubstream(stringWriter, "strings");
 
     if (common.ValueStreamPerType)
     for (var key in module.valueStreams) {
       var valueStream = module.valueStreams[key];
       writer.writeIndex(module.tags.get_index(key));      
-      writer.writeSubstream(valueStream);
+      writer.writeSubstream(valueStream, "values[" + key + "]");
     }
 
-    writer.writeSubstream(objectWriter);
-    writer.writeSubstream(arrayWriter);
+    writer.writeSubstream(objectWriter, "objects");
+    writer.writeSubstream(arrayWriter, "arrays");
 
     module.serializeValueWithKnownTag(writer, module.root, "any", null);
 
