@@ -629,7 +629,7 @@
     "boolean": true
   };
 
-  exports.FormatName               = "asmparse-jsontreebuilder-compressed-v2";
+  exports.FormatName               = "asmparse-jsontreebuilder-compressed-v3";
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
   exports.EnableVarints            = true;
@@ -657,13 +657,8 @@
   //  the current object.
   exports.RelativeIndexes          = false;
 
-  /*
-  // Partition objects into individual object streams based on type.
-  // They still share a global index space.
-  // The indexes are encoded by a stream of type tags.
-  exports.PartitionedObjectStreams = false;
-  */
-
+  // Separate sequential streams of values, partitioned by type.
+  exports.ValueStreamPerType       = false;
 
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is

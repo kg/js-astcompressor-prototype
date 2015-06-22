@@ -23,7 +23,7 @@
   function ValueReader (bytes, index, count) {
     this.bytes        = bytes;
     this.byteReader   = encoding.makeByteReader(bytes, index, count);
-    this.scratchBytes = new Uint8Array(128);
+    this.scratchBytes = new Uint8Array  (128);
     this.scratchU32   = new Uint32Array (this.scratchBytes.buffer);
     this.scratchI32   = new Int32Array  (this.scratchBytes.buffer);
     this.scratchF64   = new Float64Array(this.scratchBytes.buffer);
@@ -146,6 +146,20 @@
     var result = encoding.UTF8.decode(this.bytes, this.byteReader.getPosition(), length);
 
     this.byteReader.skip(length);
+
+    return result;
+  };
+
+  ValueReader.prototype.readSubstream = function () {
+    var length = this.readUint32();
+
+    var result = new ValueReader(this.bytes, this.byteReader.getPosition(), length);
+
+    this.byteReader.skip(length);
+
+    var length2 = this.readUint32();
+    if (length2 !== length)
+      throw new Error("Length footer didn't match length header");
 
     return result;
   };
@@ -343,7 +357,7 @@
   };
 
 
-  function deserializeObjectTable (reader, module, tag) {
+  function deserializeObjectTable (reader, module) {
     var count = reader.readUint32();
     if (count === false)
       throw new Error("Truncated file");
@@ -360,19 +374,15 @@
   };
 
 
-  function allocateObjectTable (module, shapeName, count, baseIndex) {
+  function allocateObjectTable (module, count) {
     var table = new Array(count);
     for (var i = 0; i < count; i++) {
-      // TODO: Pre-allocate with known shape for better perf
       var o = new Object();
-
-      if (shapeName !== "object")
-        o.type = shapeName;
 
       table[i] = o;
     };
 
-    table.baseIndex = baseIndex;
+    table.baseIndex = 0;
 
     if (module.objects)
       throw new Error("Object table already allocated");
@@ -403,40 +413,34 @@
     var tagCount    = reader.readUint32();
     var stringCount = reader.readUint32();
     var arrayCount  = reader.readUint32();
+    var objectCount = reader.readUint32();
 
 
-    var readUtf8String = function (reader) { 
-      var text = reader.readUtf8String();
+    var tagReader    = reader.readSubstream();
+    var stringReader = reader.readSubstream();
+    var objectReader = reader.readSubstream();
+    var arrayReader  = reader.readSubstream();
+
+
+    var readUtf8String = function (_) { 
+      var text = _.readUtf8String();
       if (text === false)
         throw new Error("Truncated file");
       return text;
     };
 
     console.time("  read tags");
-    result.tags = deserializeTable(reader, readUtf8String);
+    result.tags = deserializeTable(tagReader, readUtf8String);
     console.timeEnd("  read tags");
 
 
-    console.time("  read object table directory");
-    var objectTableCount = reader.readUint32();
-    var objectTableNames = new Array(objectTableCount);
-
-    var tagIndices = new Array(objectTableCount);
-
-    for (var i = 0; i < objectTableCount; i++) {
-      var tagIndex = tagIndices[i] = reader.readUint32();
-      var tag = result.tags[tagIndex];
-      var tableCount = reader.readUint32();
-      var baseIndex = 0;
-
-      allocateObjectTable(result, tag, tableCount, baseIndex);
-    }
-    console.timeEnd("  read object table directory");
-
-
     console.time("  read string tables");
-    result.strings = deserializeTable(reader, readUtf8String);
+    result.strings = deserializeTable(stringReader, readUtf8String);
     console.timeEnd("  read string tables");
+
+
+    if (common.ValueStreamPerType)
+      throw new Error();
 
 
     result.arrays    = new Array(arrayCount);
@@ -447,16 +451,15 @@
       result.arrays[i] = a;
     }
 
+    allocateObjectTable(result, objectCount);
+
+
     console.time("  read objects");
-    for (var i = 0; i < objectTableCount; i++) {
-      var tagIndex = tagIndices[i];
-      var tag = result.tags[tagIndex];
-      deserializeObjectTable(reader, result, tag);
-    }
+    deserializeObjectTable(objectReader, result);
     console.timeEnd("  read objects");
 
     console.time("  read arrays");
-    deserializeArrays(reader, result);
+    deserializeArrays(arrayReader, result);
     console.timeEnd("  read arrays");
 
     result.root = deserializeValueWithKnownTag(reader, result, "any", null);

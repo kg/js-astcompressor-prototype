@@ -19,11 +19,12 @@
 
   var IoTrace = false;
 
-  function ValueWriter () {
-    // HACK: Max size 32mb because growable buffers are effort
-    var maxSize = (1024 * 1024) * 32;
+  function ValueWriter (capacity) {
+    if (typeof (capacity) !== "number")
+      // HACK: Default max size 32mb because growable buffers are effort
+      capacity = (1024 * 1024) * 32;
 
-    this.bytes    = new Uint8Array(maxSize);
+    this.bytes    = new Uint8Array(capacity);
     this.position = 0;
     this.view     = new DataView(this.bytes.buffer);
 
@@ -172,6 +173,14 @@
     encoding.UTF8.encode(text, this);
   };
 
+  ValueWriter.prototype.writeSubstream = function (otherWriter) {
+    this.writeUint32(otherWriter.position);
+
+    this.writeBytes(otherWriter.bytes, 0, otherWriter.position);
+
+    this.writeUint32(otherWriter.position);
+  };
+
   ValueWriter.prototype.getResult = 
   ValueWriter.prototype.toArray = function () {
     return this.bytes.subarray(0, this.position);
@@ -191,9 +200,14 @@
 
     this.tags.add("any");
     this.tags.add("object");
+    this.tags.add("boolean");
+    this.tags.add("string");
+    this.tags.add("integer");
+    this.tags.add("number");
 
     this.objects = new ObjectTable("object");
-    this.objectTableCount = 1;
+
+    this.valueStreams = Object.create(null);
 
     this.anyTypeValuesWritten = 0;
 
@@ -206,11 +220,6 @@
       return null;
 
     return this.objects;
-  };
-
-
-  JsAstModule.prototype.forEachObjectTable = function (callback) {
-    callback(this.objects, "object");
   };
 
 
@@ -322,7 +331,7 @@
       count:                  0
     };
 
-    this.forEachObjectTable(this.deduplicateObjectTable.bind(this, state));
+    this.deduplicateObjectTable(state, this.objects);
 
     if (state.count > 0) {
       console.log(
@@ -370,12 +379,38 @@
   };
 
 
+  JsAstModule.prototype.createValueStreams = function () {
+    var self = this;
+
+    this.tags.forEach(function (entry) {
+      var tag = entry.get_name();
+      var size = 1024 * 1024 * 4;
+
+      self.valueStreams[tag] = new ValueWriter(size);
+    });
+  };
+
+
+  JsAstModule.prototype.getValueWriterForField = function (defaultWriter, field, tag) {
+    if (common.ValueStreamPerType) {
+      var writer = this.valueStreams[tag];
+      if (!writer)
+        throw new Error("No value stream for tag '" + tag + "'");
+
+      return writer;
+    } else {
+      return defaultWriter;
+    }
+  };
+
+
   JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
     try {
-      this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
+      var specializedWriter = this.getValueWriterForField(writer, field, tag);
+      this.serializeValueWithKnownTag(specializedWriter, value, tag, baseIndex);
     } catch (exc) {
       console.log("Failed while writing field " + field.name + " of type " + shape.name);
       throw exc;
@@ -597,13 +632,7 @@
     this.tags   .finalize(0);
     this.strings.finalize(0);
     this.arrays .finalize(0);
-
-    var globalBaseIndex = 0;
-    this.forEachObjectTable(function (table) {
-      table.globalBaseIndex = globalBaseIndex;
-      table.finalize(0);
-      globalBaseIndex += table.get_count();
-    });
+    this.objects.finalize(0);
   };
 
 
@@ -705,36 +734,44 @@
     var tagCount    = module.tags.get_count();
     var stringCount = module.strings.get_count();
     var arrayCount  = module.arrays.get_count();
+    var objectCount = module.objects.get_count();
 
     writer.writeUint32(tagCount);
     writer.writeUint32(stringCount);
     writer.writeUint32(arrayCount);
+    writer.writeUint32(objectCount);
 
-    module.serializeTable(writer, module.tags, true, function (writer, value) {
-      writer.writeUtf8String(value);
+    var tagWriter = new ValueWriter(1024 * 1024 * 1);
+    module.serializeTable(tagWriter, module.tags, true, function (_, value) {
+      _.writeUtf8String(value);
     });
 
-    writer.writeUint32(module.objectTableCount);
-
-    module.forEachObjectTable(function (table, key) {
-      // FIXME: Tag index instead? Implied tag index by order?
-      writer.writeUint32(module.tags.get_index(key));
-      writer.writeUint32(table.get_count());
+    var stringWriter = new ValueWriter(1024 * 1024 * 4);
+    module.serializeTable(stringWriter, module.strings, true, function (_, value) {
+      _.writeUtf8String(value);
     });
 
-    module.serializeTable(writer, module.strings, true, function (writer, value) {
-      writer.writeUtf8String(value);
-    });
+    if (common.ValueStreamPerType)
+      module.createValueStreams();
 
-    module.forEachObjectTable(function (table) {
-      // IoTrace = (table.semantic === "IfStatement");
-      if (IoTrace)
-        console.log("// table " + table.semantic);
-
-      module.serializeTable(writer, table, true,  module.serializeObject);
-    });
+    var objectWriter = new ValueWriter(1024 * 1024 * 8);
+    module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
     
-    module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
+    var arrayWriter = new ValueWriter(1024 * 1024 * 8);
+    module.serializeTable(arrayWriter, module.arrays,  true,  module.serializeArray);
+
+    writer.writeSubstream(tagWriter);
+    writer.writeSubstream(stringWriter);
+
+    if (common.ValueStreamPerType)
+    for (var key in module.valueStreams) {
+      var valueStream = module.valueStreams[key];
+      writer.write(module.tags.get_index(key));      
+      writer.writeSubstream(valueStream);
+    }
+
+    writer.writeSubstream(objectWriter);
+    writer.writeSubstream(arrayWriter);
 
     module.serializeValueWithKnownTag(writer, module.root, "any", null);
 
