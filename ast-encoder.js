@@ -568,7 +568,14 @@
       }
 
       case "array":
-        throw new Error("not implemented");
+        writer.writeVarUint32(value.length);
+
+        for (var i = 0; i < value.length; i++) {
+          var element = value[i];
+          this.serializeValueWithKnownTag(writer, element, "any", baseIndex);
+        }
+
+        return;
 
       case "object":
       default:

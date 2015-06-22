@@ -259,7 +259,15 @@
         return getTableEntry(module.strings, index);
 
       case "array":
-        throw new Error("not implemented");
+        var length = reader.readVarUint32();
+        var array = new Array(length);
+
+        for (var i = 0; i < length; i++) {
+          var element = deserializeValueWithKnownTag(reader, module, "any", baseIndex);
+          array[i] = element;
+        }
+
+        return array;
 
       case "object":
         var objectTable;
@@ -428,7 +436,6 @@
     //  this simplifies table deserialization...
     var tagCount    = reader.readUint32();
     var stringCount = reader.readUint32();
-    var arrayCount  = reader.readUint32();
     var objectCount = reader.readUint32();
 
 
