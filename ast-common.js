@@ -632,7 +632,7 @@
   exports.FormatName               = "asmparse-jsontreebuilder-compressed-v3";
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints            = false;
+  exports.EnableVarints            = true;
 
   // Sorts the object table to reduce the average size of varints,
   //  and potentially improve stream compression in general.

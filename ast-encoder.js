@@ -570,9 +570,14 @@
       case "array":
         writer.writeVarUint32(value.length);
 
+        // The tree-walker figured out whether we need to use 'any' earlier
+        var elementTag = this.arrayTypeTags.get(value);
+        var elementTagIndex = this.getIndexForTypeTag(elementTag);
+        writer.writeVarUint32(elementTagIndex);
+
         for (var i = 0; i < value.length; i++) {
           var element = value[i];
-          this.serializeValueWithKnownTag(writer, element, "any", baseIndex);
+          this.serializeValueWithKnownTag(writer, element, elementTag, baseIndex);
         }
 
         return;

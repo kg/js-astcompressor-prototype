@@ -205,6 +205,8 @@
       throw new Error("Truncated file");
 
     var tag = module.tags[tagIndex];
+    if (typeof (tag) !== "string")
+      throw new Error("Invalid tag index: " + tagIndex);
 
     return tag;
   };
@@ -262,8 +264,10 @@
         var length = reader.readVarUint32();
         var array = new Array(length);
 
+        var elementTag = readTypeTag(reader, module);
+
         for (var i = 0; i < length; i++) {
-          var element = deserializeValueWithKnownTag(reader, module, "any", baseIndex);
+          var element = deserializeValueWithKnownTag(reader, module, elementTag, baseIndex);
           array[i] = element;
         }
 
