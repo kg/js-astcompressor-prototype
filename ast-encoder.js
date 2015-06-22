@@ -73,6 +73,18 @@
     this.writeBytes(this.scratchBytes, 0, count);
   };
 
+  ValueWriter.prototype.writeUint24 = function (value) {
+    var masked = value & 0xFFFFFF;
+    if (masked !== value)
+      throw new Error("Value is larger than 24 bits");
+
+    if (IoTrace)
+      console.log("write uint24", masked.toString(16));
+
+    this.view.setUint32(this.position, masked, true);
+    this.position += 3;
+  };
+
   ValueWriter.prototype.writeUint32 = function (value) {
     if (IoTrace)
       console.log("write uint", value.toString(16));
@@ -99,6 +111,8 @@
       var after = this.position;
       var lengthBytes = after - before;
       this.varintSizes[lengthBytes - 1] += 1;
+    } else if (common.ThreeByteIndices) {
+      this.writeUint24(value);
     } else {
       this.writeUint32(value);
     }

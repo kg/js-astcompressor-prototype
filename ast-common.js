@@ -632,7 +632,7 @@
   exports.FormatName               = "asmparse-jsontreebuilder-compressed-v3";
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints            = true;
+  exports.EnableVarints            = false;
 
   // Sorts the object table to reduce the average size of varints,
   //  and potentially improve stream compression in general.
@@ -653,12 +653,19 @@
   // How low can the minimum hitcount be
   exports.LocalityMinimumThreshold = 3;
 
+  // If set to an integer, objects with this # of uses or
+  //  less are encoded inline.
+  exports.InlineUseCountThreshold  = null;
+
   // Encode indexes as signed values relative to the index of
   //  the current object.
   exports.RelativeIndexes          = false;
 
   // Separate sequential streams of values, partitioned by type.
   exports.ValueStreamPerType       = true;
+
+  // If varints are disabled, writes indices as 3-byte uints
+  exports.ThreeByteIndices         = false;
 
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is

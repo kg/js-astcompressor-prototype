@@ -68,6 +68,18 @@
     return result;
   };
 
+  ValueReader.prototype.readUint24 = function () {
+    this.scratchU32[0] = 0;
+
+    if (!this.readScratchBytes(3))
+      return false;
+
+    var result = this.scratchU32[0];
+    if (IoTrace)
+      console.log("read  uint24", result.toString(16));
+    return result;
+  };
+
   ValueReader.prototype.readInt32 = function () {
     if (!this.readScratchBytes(4))
       return false;
@@ -79,8 +91,12 @@
   };
 
   ValueReader.prototype.readVarUint32 = function () {
-    if (!common.EnableVarints)
-      return this.readUint32();
+    if (!common.EnableVarints) {
+      if (common.ThreeByteIndices)
+        return this.readUint24();
+      else
+        return this.readUint32();
+    }
 
     var result = common.readLEBUint32(this.byteReader);
     if (IoTrace)

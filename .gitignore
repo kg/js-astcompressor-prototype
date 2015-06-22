@@ -1,1 +1,5 @@
 /Test
+*.gz
+*.lzham
+third_party/lzhamtest
+third_party/7z.exe
