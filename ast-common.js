@@ -663,7 +663,7 @@
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is
   //  super busted for large objects.
-  exports.PrettyJson              = false;
+  exports.PrettyJson               = false;
 
 
   exports.ShapeDefinition = ShapeDefinition;

@@ -19,7 +19,7 @@
 
   var IoTrace = false;
 
-  function ValueWriter (capacity) {
+  function ValueWriter (capacity, parent) {
     if (typeof (capacity) !== "number")
       // HACK: Default max size 32mb because growable buffers are effort
       capacity = (1024 * 1024) * 32;
@@ -28,7 +28,10 @@
     this.position = 0;
     this.view     = new DataView(this.bytes.buffer);
 
-    this.varintSizes = [0, 0, 0, 0, 0, 0];
+    if (parent)
+      this.varintSizes = parent.varintSizes;
+    else
+      this.varintSizes = [0, 0, 0, 0, 0, 0];
   };
 
   ValueWriter.prototype.getPosition = function () {
@@ -379,14 +382,14 @@
   };
 
 
-  JsAstModule.prototype.createValueStreams = function () {
+  JsAstModule.prototype.createValueStreams = function (writer) {
     var self = this;
 
     this.tags.forEach(function (entry) {
       var tag = entry.get_name();
       var size = 1024 * 1024 * 4;
 
-      self.valueStreams[tag] = new ValueWriter(size);
+      self.valueStreams[tag] = new ValueWriter(size, writer);
     });
   };
 
@@ -659,15 +662,19 @@
     };
 
     var walkArray = function astToModule_walkArray (array) {
-      // HACK: Identify arrays where all elements live in the same table.
-      // This is to compensate for this prototype not using static type information
-      //  from the shapes table when compressing arrays.
-      // (A real implementation would not have this problem.)
       var commonTypeTag = null;
+
       for (var i = 0, l = array.length; i < l; i++) {
         var item = array[i];
         var tag = result.getTypeTagForValue(item);
-      
+
+        // HACK: We know that we don't have primitives mixed in
+        //  with objects in arrays, so we can cheat here.
+        if ((tag !== "string") && !Array.isArray(item)) {
+          // console.log(tag, "-> object");
+          tag = "object";
+        }
+
         if (commonTypeTag === null) {
           commonTypeTag = tag;
         } else if (commonTypeTag !== tag) {
@@ -741,23 +748,23 @@
     writer.writeUint32(arrayCount);
     writer.writeUint32(objectCount);
 
-    var tagWriter = new ValueWriter(1024 * 1024 * 1);
+    var tagWriter = new ValueWriter(1024 * 1024 * 1, writer);
     module.serializeTable(tagWriter, module.tags, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
-    var stringWriter = new ValueWriter(1024 * 1024 * 4);
+    var stringWriter = new ValueWriter(1024 * 1024 * 4, writer);
     module.serializeTable(stringWriter, module.strings, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
     if (common.ValueStreamPerType)
-      module.createValueStreams();
+      module.createValueStreams(writer);
 
-    var objectWriter = new ValueWriter(1024 * 1024 * 8);
+    var objectWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
     
-    var arrayWriter = new ValueWriter(1024 * 1024 * 8);
+    var arrayWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(arrayWriter, module.arrays,  true,  module.serializeArray);
 
     writer.writeSubstream(tagWriter);

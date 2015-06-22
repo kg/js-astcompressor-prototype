@@ -239,7 +239,10 @@
   };
 
   JsonTreeBuilder.prototype.makePair = function (key, value) {
-    var result = this.make("Pair");
+    var keyType = typeof(key);
+    keyType = keyType[0].toUpperCase() + keyType.substr(1);
+
+    var result = this.make(keyType + "Pair");
     result.key = key;
     result.value = value;
     return this.finalize(result);

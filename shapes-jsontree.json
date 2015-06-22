@@ -34,8 +34,12 @@
     "ArrayLiteral": {
       "elements": ["Expression"]
     },
-    "Pair": {
-      "key": "any",
+    "StringPair": {
+      "key": "string",
+      "value": "Expression"
+    },
+    "NumberPair": {
+      "key": "double",
       "value": "Expression"
     },
     "UnaryOperator": {
