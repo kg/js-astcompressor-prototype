@@ -88,6 +88,34 @@
     return result;
   };
 
+  ValueReader.prototype.readVarInt32 = function () {
+    if (!common.EnableVarints)
+      return this.readInt32();
+
+    var result = common.readLEBInt32(this.byteReader);
+    if (IoTrace)
+      console.log("read  varint", result.toString(16));
+    return result;
+  };
+
+  ValueReader.prototype.readRelativeIndex = function (baseIndex) {
+    var indexRaw = this.readVarInt32();
+    if (indexRaw === 0)
+      return 0xFFFFFFFF;
+
+    var result;
+    if (indexRaw > 0) {
+      result = baseIndex + indexRaw - 1;
+    } else {
+      result = baseIndex + indexRaw;
+    }
+
+    if (IoTrace)
+      console.log("read relindex " + indexRaw + " + " + baseIndex + " -> " + result);
+
+    return result;
+  };
+
   ValueReader.prototype.readIndex = function () {
     var indexRaw = this.readVarUint32();
 
@@ -151,13 +179,6 @@
   };
 
 
-  function deserializeTaggedValue (reader, module) {
-    var tag = readTypeTag(reader, module);
-
-    return deserializeValueWithKnownTag(reader, module, tag);
-  };
-
-
   function getTableEntry (table, index) {
     if (!table)
       throw new Error("Table expected");
@@ -176,26 +197,19 @@
   };
 
 
-  function getTableEntryForGlobalIndex (module, index) {
-    if (index === 0xFFFFFFFF)
-      return null;
-
-    // FIXME: Slow and awful
-
-    for (var k in module.objectTables) {
-      var table = module.objectTables[k];
-      var firstIndex = table.baseIndex;
-      var lastIndex = firstIndex + table.length - 1;
-
-      if ((index >= firstIndex) && (index <= lastIndex))
-        return table[index - firstIndex];
+  function readMaybeRelativeIndex (reader, baseIndex) {
+    if (
+      common.RelativeIndexes &&
+      typeof (baseIndex) === "number"
+    ) {
+      return reader.readRelativeIndex(baseIndex);
+    } else {
+      return reader.readIndex();
     }
-
-    throw new Error("No table found for global index " + index);
   };
 
 
-  function deserializeValueWithKnownTag (reader, module, tag) {
+  function deserializeValueWithKnownTag (reader, module, tag, baseIndex) {
     switch (tag) {
       case "any": {
         tag = readTypeTag(reader, module);
@@ -204,17 +218,17 @@
 
         if (IoTrace)
           console.log("read  any ->");
-        return deserializeValueWithKnownTag(reader, module, tag);
+        return deserializeValueWithKnownTag(reader, module, tag, baseIndex);
       }
 
       case "string":
-        var index = reader.readIndex();
+        var index = readMaybeRelativeIndex(reader, baseIndex);
         if (IoTrace)
           console.log("read  string");
         return getTableEntry(module.strings, index);
 
       case "array":
-        var index = reader.readIndex();
+        var index = readMaybeRelativeIndex(reader, baseIndex);
         if (IoTrace)
           console.log("read  array");
         return getTableEntry(module.arrays, index);
@@ -226,7 +240,7 @@
 
         objectTable = module.objects;
 
-        var index = reader.readIndex();
+        var index = readMaybeRelativeIndex(reader, baseIndex);
         return getTableEntry(objectTable, index);
 
       case "boolean":
@@ -243,7 +257,7 @@
         if (!shape)
           throw new Error("Unhandled value type " + tag + " with no shape");
 
-        var index = reader.readIndex();
+        var index = readMaybeRelativeIndex(reader, baseIndex);
 
         var objectTable;
         objectTable = module.objects;
@@ -255,23 +269,23 @@
   };
 
 
-  function deserializeArrayContents (reader, module, arr) {
+  function deserializeArrayContents (reader, module, arr, index) {
     var count = reader.readVarUint32();
     var elementTypeTag = readTypeTag(reader, module);
 
     // Stream of tagged values
     for (var i = 0; i < count; i++) {
-      var value = deserializeValueWithKnownTag(reader, module, elementTypeTag);
+      var value = deserializeValueWithKnownTag(reader, module, elementTypeTag, null);
       arr[i] = value;
     }
   };
 
 
-  function deserializeObjectContents (reader, module, obj) {
+  function deserializeObjectContents (reader, module, obj, index) {
     var shapeName = readTypeTag(reader, module);
 
     if (IoTrace)
-      console.log("// object body");
+      console.log("// object body #" + index);
 
     var shape = module.shapes.get(shapeName);
     if (!shape)
@@ -288,7 +302,7 @@
         return shape;
       });
 
-      value = deserializeValueWithKnownTag(reader, module, tag);
+      value = deserializeValueWithKnownTag(reader, module, tag, index);
 
       if (IoTrace)
         console.log("// " + fd.name + " =", value);
@@ -324,7 +338,7 @@
 
     for (var i = 0; i < count; i++) {
       var arr = module.arrays[i];
-      deserializeArrayContents(reader, module, arr);
+      deserializeArrayContents(reader, module, arr, i);
     }    
   };
 
@@ -341,7 +355,7 @@
 
     for (var i = 0; i < count; i++) {
       var obj = table[i];
-      deserializeObjectContents(reader, module, obj);
+      deserializeObjectContents(reader, module, obj, i);
     }
   };
 
@@ -415,9 +429,6 @@
       var tableCount = reader.readUint32();
       var baseIndex = 0;
 
-      if (common.GlobalIndexSpace)
-        baseIndex = reader.readUint32();
-
       allocateObjectTable(result, tag, tableCount, baseIndex);
     }
     console.timeEnd("  read object table directory");
@@ -448,7 +459,7 @@
     deserializeArrays(reader, result);
     console.timeEnd("  read arrays");
 
-    result.root = deserializeValueWithKnownTag(reader, result, "any");
+    result.root = deserializeValueWithKnownTag(reader, result, "any", null);
     if (!result.root)
       throw new Error("Failed to retrieve root from module");
 

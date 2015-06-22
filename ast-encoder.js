@@ -100,6 +100,46 @@
     }
   };
 
+  ValueWriter.prototype.writeVarInt32 = function (value) {
+    if (common.EnableVarints) {
+      if (IoTrace)
+        console.log("write varint", value.toString(16));
+
+      var before = this.position;
+      common.writeLEBInt32(this, value);
+      var after = this.position;
+      var lengthBytes = after - before;
+      this.varintSizes[lengthBytes - 1] += 1;
+    } else {
+      this.writeInt32(value);
+    }
+  };
+
+  ValueWriter.prototype.writeRelativeIndex = function (value, base) {
+    var relativeValue;
+
+    if (value === 0xFFFFFFFF) {
+      relativeValue = 0;
+    } else {
+      relativeValue = (value - base);  
+      if (relativeValue >= 0)
+        relativeValue += 1;
+    }
+
+    if (IoTrace)
+      console.log(
+        "write relindex " + 
+        (
+          (value === 0xFFFFFFFF)
+            ? "null"
+            : value
+        ) + 
+        " - " + base + " -> " + relativeValue
+      );
+
+    this.writeVarInt32(relativeValue);
+  };
+
   ValueWriter.prototype.writeIndex = function (value) {
     if (value === 0xFFFFFFFF)
       this.writeVarUint32(0);
@@ -330,12 +370,12 @@
   };
 
 
-  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value) {
+  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
     try {
-      this.serializeValueWithKnownTag(writer, value, tag);
+      this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
     } catch (exc) {
       console.log("Failed while writing field " + field.name + " of type " + shape.name);
       throw exc;
@@ -343,7 +383,7 @@
   };
 
 
-  JsAstModule.prototype.serializeObject = function (writer, node) {
+  JsAstModule.prototype.serializeObject = function (writer, node, index) {
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
@@ -352,8 +392,8 @@
       throw new Error("Tag table not finalized");
 
     if (IoTrace)
-      console.log("// object body");
-
+      console.log("// object body #" + index);
+    
     writer.writeVarUint32(shape.tagIndex);
 
     var self = this, fields = shape.shape.fields;
@@ -364,7 +404,7 @@
       if (typeof (value) === "undefined")
         value = null;
 
-      this.serializeFieldValue(writer, shape, fd, value);
+      this.serializeFieldValue(writer, shape, fd, value, index);
 
       if (IoTrace)
         console.log("// " + fd.name + " =", value);      
@@ -434,7 +474,7 @@
 
 
   // Or unknown tag, if you pass 'any', because why not.
-  JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag) {
+  JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag, baseIndex) {
     switch (tag) {
       case "true":
       case "false":
@@ -468,7 +508,7 @@
         var tagIndex = this.getIndexForTypeTag(tag);
         writer.writeVarUint32(tagIndex);
 
-        return this.serializeValueWithKnownTag(writer, value, tag);
+        return this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
       }
 
       case "object":
@@ -503,7 +543,14 @@
 
       // There's only one global object table, so we can encode everything
       //  as a single index.
-      writer.writeIndex(index);
+      if (
+        common.RelativeIndexes && 
+        (typeof (baseIndex) === "number")
+      ) {
+        writer.writeRelativeIndex(index, baseIndex)
+      } else {
+        writer.writeIndex(index);
+      }
     } catch (err) {
       console.log("Failed while writing '" + tag + "'", value);
       throw err;
@@ -524,8 +571,9 @@
     var tagIndex = this.getIndexForTypeTag(tag);
     writer.writeVarUint32(tagIndex);
 
+    // FIXME: Use relative indexes here?
     for (var i = 0, l = node.length; i < l; i++) {
-      this.serializeValueWithKnownTag(writer, node[i], tag);
+      this.serializeValueWithKnownTag(writer, node[i], tag, null);
     }
   };
 
@@ -540,7 +588,7 @@
       var value = id.get_value();
 
       // gross
-      serializeEntry.call(this, writer, value);
+      serializeEntry.call(this, writer, value, i);
     }
   };
 
@@ -672,11 +720,6 @@
       // FIXME: Tag index instead? Implied tag index by order?
       writer.writeUint32(module.tags.get_index(key));
       writer.writeUint32(table.get_count());
-
-      // If global index spaces are in use, we write the base
-      //  index here so that the decoder knows it early.
-      if (common.GlobalIndexSpace)
-        writer.writeUint32(table.globalBaseIndex);
     });
 
     module.serializeTable(writer, module.strings, true, function (writer, value) {
@@ -693,7 +736,7 @@
     
     module.serializeTable(writer, module.arrays,  true,  module.serializeArray);
 
-    module.serializeValueWithKnownTag(writer, module.root, "any");
+    module.serializeValueWithKnownTag(writer, module.root, "any", null);
 
     console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);
