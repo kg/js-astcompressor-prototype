@@ -766,7 +766,7 @@
     if (common.ValueStreamPerType)
     for (var key in module.valueStreams) {
       var valueStream = module.valueStreams[key];
-      writer.write(module.tags.get_index(key));      
+      writer.writeIndex(module.tags.get_index(key));      
       writer.writeSubstream(valueStream);
     }
 

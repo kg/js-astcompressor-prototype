@@ -172,6 +172,8 @@
   function JsAstModule (shapes) {
     this.shapes  = shapes;
 
+    this.valueStreams = Object.create(null);
+
     this.tags    = null;
     this.strings = null;
     this.arrays  = null;
@@ -295,6 +297,19 @@
   };
 
 
+  function getReaderForField (defaultReader, module, field, tag) {
+    if (common.ValueStreamPerType) {
+      var reader = module.valueStreams[tag];
+      if (!reader)
+        throw new Error("No value stream for tag '" + tag + "'");
+
+      return reader;
+    } else {
+      return defaultReader;
+    }
+  };
+
+
   function deserializeObjectContents (reader, module, obj, index) {
     var shapeName = readTypeTag(reader, module);
 
@@ -316,7 +331,8 @@
         return shape;
       });
 
-      value = deserializeValueWithKnownTag(reader, module, tag, index);
+      var fieldReader = getReaderForField(reader, module, fd, tag);
+      value = deserializeValueWithKnownTag(fieldReader, module, tag, index);
 
       if (IoTrace)
         console.log("// " + fd.name + " =", value);
@@ -416,12 +432,6 @@
     var objectCount = reader.readUint32();
 
 
-    var tagReader    = reader.readSubstream();
-    var stringReader = reader.readSubstream();
-    var objectReader = reader.readSubstream();
-    var arrayReader  = reader.readSubstream();
-
-
     var readUtf8String = function (_) { 
       var text = _.readUtf8String();
       if (text === false)
@@ -430,17 +440,25 @@
     };
 
     console.time("  read tags");
+    var tagReader    = reader.readSubstream();
     result.tags = deserializeTable(tagReader, readUtf8String);
     console.timeEnd("  read tags");
 
 
     console.time("  read string tables");
+    var stringReader = reader.readSubstream();
     result.strings = deserializeTable(stringReader, readUtf8String);
     console.timeEnd("  read string tables");
 
 
     if (common.ValueStreamPerType)
-      throw new Error();
+    for (var i = 0; i < result.tags.length; i++) {
+      var tagIndex = reader.readIndex();
+      var tag = result.tags[tagIndex];
+
+      var valueStream = reader.readSubstream();
+      result.valueStreams[tag] = valueStream;
+    }
 
 
     result.arrays    = new Array(arrayCount);
@@ -455,10 +473,12 @@
 
 
     console.time("  read objects");
+    var objectReader = reader.readSubstream();
     deserializeObjectTable(objectReader, result);
     console.timeEnd("  read objects");
 
     console.time("  read arrays");
+    var arrayReader  = reader.readSubstream();
     deserializeArrays(arrayReader, result);
     console.timeEnd("  read arrays");
 

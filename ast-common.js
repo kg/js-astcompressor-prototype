@@ -658,7 +658,7 @@
   exports.RelativeIndexes          = false;
 
   // Separate sequential streams of values, partitioned by type.
-  exports.ValueStreamPerType       = false;
+  exports.ValueStreamPerType       = true;
 
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is
