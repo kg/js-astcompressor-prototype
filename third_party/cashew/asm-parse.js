@@ -480,7 +480,7 @@
           )
         ) {
           // No initializer
-          declarations.push([variableName]);
+          declarations.push(this.builder.makeDeclaration(variableName, null));
 
           if (token.value === "}")
             this.rewind(token);

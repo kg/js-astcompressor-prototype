@@ -192,7 +192,6 @@
 
     this.tags    = null;
     this.strings = null;
-    this.arrays  = null;
 
     this.objects = null;
 
@@ -260,10 +259,7 @@
         return getTableEntry(module.strings, index);
 
       case "array":
-        var index = readMaybeRelativeIndex(reader, baseIndex);
-        if (IoTrace)
-          console.log("read  array");
-        return getTableEntry(module.arrays, index);
+        throw new Error("not implemented");
 
       case "object":
         var objectTable;
@@ -377,18 +373,6 @@
   };
 
 
-  function deserializeArrays (reader, module) {
-    var count = reader.readUint32();
-    if (count === false)
-      throw new Error("Truncated file");
-
-    for (var i = 0; i < count; i++) {
-      var arr = module.arrays[i];
-      deserializeArrayContents(reader, module, arr, i);
-    }    
-  };
-
-
   function deserializeObjectTable (reader, module) {
     var count = reader.readUint32();
     if (count === false)
@@ -477,14 +461,6 @@
     }
 
 
-    result.arrays    = new Array(arrayCount);
-    for (var i = 0; i < arrayCount; i++) {
-      // FIXME: This means we have to grow it when repopulating it. :-(
-      var a = new Array();
-
-      result.arrays[i] = a;
-    }
-
     allocateObjectTable(result, objectCount);
 
 
@@ -492,11 +468,6 @@
     var objectReader = reader.readSubstream();
     deserializeObjectTable(objectReader, result);
     console.timeEnd("  read objects");
-
-    console.time("  read arrays");
-    var arrayReader  = reader.readSubstream();
-    deserializeArrays(arrayReader, result);
-    console.timeEnd("  read arrays");
 
     result.root = deserializeValueWithKnownTag(reader, result, "any", null);
     if (!result.root)

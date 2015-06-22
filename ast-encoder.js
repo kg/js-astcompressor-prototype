@@ -220,7 +220,6 @@
 
     this.tags    = new StringTable("tag");
     this.strings = new StringTable("string");
-    this.arrays  = new ObjectTable("array");
 
     this.tags.add("any");
     this.tags.add("object");
@@ -517,8 +516,6 @@
 
     if (tag === "string")
       return this.strings;
-    else if (tag === "array")
-      return this.arrays;
     else {
       var shape = this.shapes.get(tag);
       if (shape) {
@@ -569,6 +566,9 @@
 
         return this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
       }
+
+      case "array":
+        throw new Error("not implemented");
 
       case "object":
       default:
@@ -655,7 +655,6 @@
   JsAstModule.prototype.finalize = function () {
     this.tags   .finalize(0);
     this.strings.finalize(0);
-    this.arrays .finalize(0);
     this.objects.finalize(0);
   };
 
@@ -761,12 +760,10 @@
 
     var tagCount    = module.tags.get_count();
     var stringCount = module.strings.get_count();
-    var arrayCount  = module.arrays.get_count();
     var objectCount = module.objects.get_count();
 
     writer.writeUint32(tagCount);
     writer.writeUint32(stringCount);
-    writer.writeUint32(arrayCount);
     writer.writeUint32(objectCount);
 
     var tagWriter = new ValueWriter(1024 * 1024 * 1, writer);
@@ -784,9 +781,6 @@
 
     var objectWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
-    
-    var arrayWriter = new ValueWriter(1024 * 1024 * 8, writer);
-    module.serializeTable(arrayWriter, module.arrays,  true,  module.serializeArray);
 
     writer.writeSubstream(tagWriter, "tags");
     writer.writeSubstream(stringWriter, "strings");
@@ -799,7 +793,6 @@
     }
 
     writer.writeSubstream(objectWriter, "objects");
-    writer.writeSubstream(arrayWriter, "arrays");
 
     module.serializeValueWithKnownTag(writer, module.root, "any", null);
 
