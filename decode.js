@@ -4,6 +4,7 @@ require('./astutil.js');
 require('./node-augh.js');
 require('./third_party/encoding/encoding.js');
 
+var common = require("./ast-common.js");
 var astDecoder = require('./ast-decoder.js');
 var fs = require('fs');
 
@@ -43,10 +44,10 @@ console.timeEnd("moduleToAst");
 
 console.log("heapUsed " + process.memoryUsage().heapUsed);
 
-if (true)
+if (false)
   astutil.assertNoCycles(outputAst);
 
-if (outputAstFile) {
+if (common.DumpJson && outputAstFile) {
   var json;
   if (astDecoder.PrettyJson)
     json = JSON.stringify(outputAst, null, 2)
@@ -54,12 +55,4 @@ if (outputAstFile) {
     json = JSON.stringify(outputAst);
 
   fs.writeFileSync(outputAstFile, json);
-}
-
-if (false) {
-    console.time("escodegen generate");
-    var outputJs = escodegen.generate(outputAst);
-    console.timeEnd("escodegen generate");
-
-    fs.writeFileSync(outputFile, outputJs);
 }

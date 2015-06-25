@@ -52,7 +52,7 @@ console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);
 console.timeEnd("asm-parse");
 
-if (outputAstFile) {
+if (common.DumpJson && outputAstFile) {
   var json;
   if (astEncoder.PrettyJson)
     json = JSON.stringify(inputAst, null, 2)
@@ -83,7 +83,3 @@ fs.writeSync(fdOut, new Buffer(bytes), 0, bytes.length);
 console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);
-
-if (false && expectedOutputJsFile) {
-  fs.writeFileSync(expectedOutputJsFile, escodegen.generate(inputAst));
-}

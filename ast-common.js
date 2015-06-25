@@ -657,6 +657,8 @@
   //  less are encoded inline.
   exports.InlineUseCountThreshold  = null;
 
+  exports.ConditionalInlining      = !!exports.InlineUseCountThreshold;
+
   // Encode indexes as signed values relative to the index of
   //  the current object.
   exports.RelativeIndexes          = false;
@@ -671,6 +673,9 @@
   // Can't be on by default because JSON.stringify in node is
   //  super busted for large objects.
   exports.PrettyJson               = false;
+
+  // Disable this for ASTs too large for JSON.stringify
+  exports.DumpJson                 = false;
 
 
   exports.ShapeDefinition = ShapeDefinition;
