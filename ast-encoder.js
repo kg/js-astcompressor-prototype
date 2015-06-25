@@ -10,7 +10,7 @@
   }
 }(this, function (exports) {
   var common = require("./ast-common.js");
-  var treeBuilder = require("./treebuilder.js");
+  var treeBuilder = require("./parse/treebuilder.js");
 
   var AsmlikeJsonTreeBuilder = treeBuilder.AsmlikeJSON;  
   var NamedTable  = common.NamedTable,
@@ -685,6 +685,8 @@
   JsAstModuleBuilder.prototype.finalizeArray = function (array) {
     var commonTypeTag = null;
 
+    this.result.tags.add("array");
+
     for (var i = 0, l = array.length; i < l; i++) {
       var item = array[i];
       var tag = this.result.getTypeTagForValue(item);
@@ -708,6 +710,15 @@
       commonTypeTag = "any";
 
     this.result.arrayTypeTags.set(array, commonTypeTag);
+
+    for (var i = 0, l = array.length; i < l; i++) {
+      var element = array[i];
+
+      if (Array.isArray(element))
+        this.finalizeArray(element);
+      else if (typeof (element) !== "object")
+        this.finalizeValue(element);
+    }
 
     return array;
   };
@@ -744,6 +755,9 @@
         // Handle non-object properties
         if (typeof (value) !== "object")
           this.finalizeValue(value);
+        else if (Array.isArray(value))
+          this.finalizeArray(value);
+
         // Otherwise, it's been finalized since it was returned
         //  by the builder.
       }
@@ -752,7 +766,7 @@
     }
   };
 
-  JsAstModuleBuilder.prototype.finish = function () {
+  JsAstModuleBuilder.prototype.finish = function (root) {
     var rootTag = this.result.getTypeTagForValue(root);
     var rootTable = this.result.getTableForTypeTag(rootTag);
     rootTable.add(root);

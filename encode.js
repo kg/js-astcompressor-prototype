@@ -63,7 +63,7 @@ if (common.DumpJson && outputAstFile) {
 }
 
 console.time("astBuilder.finish");
-var outputModule = astBuilder.finish();
+var outputModule = astBuilder.finish(inputAst);
 console.timeEnd("astBuilder.finish");
 
 if (true) {
