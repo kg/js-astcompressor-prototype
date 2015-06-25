@@ -27,7 +27,7 @@ var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
 var inputReader = encoding.makeCharacterReader(inputJs);
-var astBuilder = new asmParse.TreeBuilder.AsmlikeJSON();
+var astBuilder = new astEncoder.JsAstModuleBuilder(shapes);
 
 if (true) {
   var configuration = Object.create(null);
@@ -62,9 +62,9 @@ if (common.DumpJson && outputAstFile) {
   fs.writeFileSync(outputAstFile, json);
 }
 
-console.time("astToModule");
-var outputModule = astEncoder.astToModule(inputAst, shapes);
-console.timeEnd("astToModule");
+console.time("astBuilder.finish");
+var outputModule = astBuilder.finish();
+console.timeEnd("astBuilder.finish");
 
 if (true) {
   console.time("deduplicateObjects");

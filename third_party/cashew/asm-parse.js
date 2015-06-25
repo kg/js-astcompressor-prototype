@@ -1160,11 +1160,10 @@
       (token.value === "{")
     ) {
       var childBlock = this.builder.makeBlock();
-      var stmt = this.builder.makeBlockStatement(childBlock);
 
       this.parseBlockInterior(childBlock);
 
-      return stmt;
+      return childBlock;
     } else {
       this.rewind(token);
       var stmt = this.parseStatement(aborter);
@@ -1205,11 +1204,10 @@
               // FIXME: How do we distinguish between a free-standing object literal,
               //  and a block scope?
               var childBlock = this.builder.makeBlock();
-              stmt = this.builder.makeBlockStatement(childBlock);
 
               this.parseBlockInterior(childBlock);
 
-              return stmt;
+              return childBlock;
 
             case "}":
               if (aborter)

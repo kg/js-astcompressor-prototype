@@ -33,6 +33,16 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
+    var result = this.make(typeTag);
+    result.statements = [];
+    return this.finalize(result);
+  };
+
+  JsonTreeBuilder.prototype.appendToBlock = function (block, statement) {
+    block.statements.push(statement);
+  };
+
   JsonTreeBuilder.prototype.makeTopLevelBlock = function () {
     return this._makeBlock("TopLevel");
   };
@@ -64,12 +74,6 @@
     } else {
       return expression;
     }
-  };
-
-  JsonTreeBuilder.prototype.makeBlockStatement = function (block) {
-    var result = this.make("BlockStatement");
-    result.block = block;
-    return this.finalize(result);
   };
 
   JsonTreeBuilder.prototype.makeLabelStatement = function (labels, labelled) {
@@ -318,17 +322,6 @@
     result.callee = callee;
     result.argumentValues = argumentValues;
     return this.finalize(result);
-  };
-
-
-  JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
-    var result = this.make(typeTag);
-    result.statements = [];
-    return this.finalize(result);
-  };
-
-  JsonTreeBuilder.prototype.appendToBlock = function (block, statement) {
-    block.statements.push(statement);
   };
 
 

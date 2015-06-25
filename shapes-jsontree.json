@@ -148,9 +148,6 @@
       "trueStatement": "Statement",
       "falseStatement": "Statement?"
     },
-    "BlockStatement": {
-      "block": "Block"
-    },
     "Function": {
       "name": "string?",
       "argumentNames": ["string"],

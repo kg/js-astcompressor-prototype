@@ -10,7 +10,9 @@
   }
 }(this, function (exports) {
   var common = require("./ast-common.js");
+  var treeBuilder = require("./treebuilder.js");
 
+  var AsmlikeJsonTreeBuilder = treeBuilder.AsmlikeJSON;  
   var NamedTable  = common.NamedTable,
       UniqueTable = common.UniqueTable,
       StringTable = common.StringTable,
@@ -191,18 +193,16 @@
   };
 
   ValueWriter.prototype.writeSubstream = function (otherWriter, description) {
-    if (true) {
-      if (otherWriter.position > 1024)
-        console.log(description + ": " + (otherWriter.position / 1024).toFixed(1) + "kb");
-      else if (otherWriter.position)
-        console.log(description + ": " + otherWriter.position + "b");
-    }
+    var sizeBytes = otherWriter.position;
 
-    this.writeUint32(otherWriter.position);
+    if (sizeBytes >= 16 * 1024)
+      console.log(description + ": " + sizeBytes + "b");
 
-    this.writeBytes(otherWriter.bytes, 0, otherWriter.position);
+    this.writeUint32(sizeBytes);
 
-    this.writeUint32(otherWriter.position);
+    this.writeBytes(otherWriter.bytes, 0, sizeBytes);
+
+    this.writeUint32(sizeBytes);
   };
 
   ValueWriter.prototype.getResult = 
@@ -216,7 +216,7 @@
 
     // Used to store the inferred type tags for arrays during
     //  the initial tree-walk
-    this.arrayTypeTags = new Map();
+    this.arrayTypeTags = new WeakMap();
 
     this.tags    = new StringTable("tag");
     this.strings = new StringTable("string");
@@ -671,85 +671,95 @@
   };
 
 
-  function astToModule (root, shapes) {
-    var result = new JsAstModule(shapes);
+  function JsAstModuleBuilder (shapes) {
+    AsmlikeJsonTreeBuilder.call(this);
 
-    var walkedCount = 0;
-    var progressInterval = 500000;
+    this.result = new JsAstModule(shapes);
 
-    var walkCallback = function astToModule_walkCallback (node, key, value) {
-      var tag = result.getTypeTagForValue(value);
-      var table = result.getTableForTypeTag(tag);
+    this.walkedCount = 0;
+    this.progressInterval = 100000;
+  };
 
-      result.tags.add(tag);
+  JsAstModuleBuilder.prototype = Object.create(AsmlikeJsonTreeBuilder.prototype);  
 
-      if (table)
-        table.add(value);
+  JsAstModuleBuilder.prototype.finalizeArray = function (array) {
+    var commonTypeTag = null;
 
-      walkedCount++;
-      if ((walkedCount % progressInterval) === 0) {
-        console.log("Scanned " + walkedCount + " nodes");
-        // console.log(key, value);
+    for (var i = 0, l = array.length; i < l; i++) {
+      var item = array[i];
+      var tag = this.result.getTypeTagForValue(item);
+
+      // HACK: We know that we don't have primitives mixed in
+      //  with objects in arrays, so we can cheat here.
+      if ((tag !== "string") && !Array.isArray(item)) {
+        // console.log(tag, "-> object");
+        tag = "object";
       }
-    };
 
-    var walkArray = function astToModule_walkArray (array) {
-      var commonTypeTag = null;
-
-      for (var i = 0, l = array.length; i < l; i++) {
-        var item = array[i];
-        var tag = result.getTypeTagForValue(item);
-
-        // HACK: We know that we don't have primitives mixed in
-        //  with objects in arrays, so we can cheat here.
-        if ((tag !== "string") && !Array.isArray(item)) {
-          // console.log(tag, "-> object");
-          tag = "object";
-        }
-
-        if (commonTypeTag === null) {
-          commonTypeTag = tag;
-        } else if (commonTypeTag !== tag) {
-          commonTypeTag = null;
-          break;
-        }
+      if (commonTypeTag === null) {
+        commonTypeTag = tag;
+      } else if (commonTypeTag !== tag) {
+        commonTypeTag = null;
+        break;
       }
-      
-      if (commonTypeTag === null)
-        commonTypeTag = "any";
+    }
+    
+    if (commonTypeTag === null)
+      commonTypeTag = "any";
 
-      result.arrayTypeTags.set(array, commonTypeTag);
+    this.result.arrayTypeTags.set(array, commonTypeTag);
 
-      for (var i = 0, l = array.length; i < l; i++)
-        walkCallback(array, i, array[i]);
-    };
+    return array;
+  };
 
-    var rootTag = result.getTypeTagForValue(root);
-    var rootTable = result.getTableForTypeTag(rootTag);
+  JsAstModuleBuilder.prototype.finalizeValue = function (value) {
+    var tag = this.result.getTypeTagForValue(value);
+    this.result.tags.add(tag);
+
+    var table = this.result.getTableForTypeTag(tag);
+    if (table)
+      table.add(value);
+
+    return value;
+  };
+
+  JsAstModuleBuilder.prototype.finalize = function (node) {
+    if (!node)
+      return;
+
+    this.walkedCount++;
+    if ((this.walkedCount % this.progressInterval) === 0) {
+      console.log("Scanned " + this.walkedCount + " nodes");
+    }
+
+    if (Array.isArray(node)) {
+      return this.finalizeArray(node);
+    } else {
+      for (var k in node) {
+        if (!node.hasOwnProperty(k))
+          continue;
+
+        var value = node[k];
+
+        // Handle non-object properties
+        if (typeof (value) !== "object")
+          this.finalizeValue(value);
+        // Otherwise, it's been finalized since it was returned
+        //  by the builder.
+      }
+
+      return this.finalizeValue(node);
+    }
+  };
+
+  JsAstModuleBuilder.prototype.finish = function () {
+    var rootTag = this.result.getTypeTagForValue(root);
+    var rootTable = this.result.getTableForTypeTag(rootTag);
     rootTable.add(root);
 
-    astutil.mutate(root, function visit (context, node) {
-      if (!node)
-        return;
+    this.result.root = root;
 
-      var nodeTable;
-
-      if (Array.isArray(node)) {
-        walkArray(node);
-      } else {
-        // FIXME: Use shape information to walk instead of 'for in'
-        for (var k in node) {
-          if (!node.hasOwnProperty(k))
-            continue;
-
-          walkCallback(node, k, node[k]);
-        }
-      }
-    });
-
-    result.root = root;
-
-    return result;
+    return this.result;
   };
 
 
@@ -815,10 +825,9 @@
   };
 
 
-  exports.PrettyJson      = common.PrettyJson;
+  exports.PrettyJson         = common.PrettyJson;
+  exports.ShapeTable         = common.ShapeTable;
+  exports.JsAstModuleBuilder = JsAstModuleBuilder;
 
-  exports.ShapeTable      = common.ShapeTable;
-
-  exports.astToModule     = astToModule;
-  exports.serializeModule = serializeModule;
+  exports.serializeModule    = serializeModule;
 }));
