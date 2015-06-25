@@ -264,11 +264,13 @@
         var length = reader.readVarUint32();
         var array = new Array(length);
 
-        var elementTag = readTypeTag(reader, module);
+        if (length > 0) {
+          var elementTag = readTypeTag(reader, module);
 
-        for (var i = 0; i < length; i++) {
-          var element = deserializeValueWithKnownTag(reader, module, elementTag, baseIndex);
-          array[i] = element;
+          for (var i = 0; i < length; i++) {
+            var element = deserializeValueWithKnownTag(reader, module, elementTag, baseIndex);
+            array[i] = element;
+          }
         }
 
         return array;
@@ -311,12 +313,15 @@
 
   function deserializeArrayContents (reader, module, arr, index) {
     var count = reader.readVarUint32();
-    var elementTypeTag = readTypeTag(reader, module);
+    
+    if (count > 0) {
+      var elementTypeTag = readTypeTag(reader, module);
 
-    // Stream of tagged values
-    for (var i = 0; i < count; i++) {
-      var value = deserializeValueWithKnownTag(reader, module, elementTypeTag, null);
-      arr[i] = value;
+      // Stream of tagged values
+      for (var i = 0; i < count; i++) {
+        var value = deserializeValueWithKnownTag(reader, module, elementTypeTag, null);
+        arr[i] = value;
+      }
     }
   };
 

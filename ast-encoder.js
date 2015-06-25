@@ -196,7 +196,7 @@
     var sizeBytes = otherWriter.position;
 
     if (sizeBytes >= 16 * 1024)
-      console.log(description + ": " + sizeBytes + "b");
+      console.log(description + ": " + (sizeBytes / 1024).toFixed(2) + "KB");
 
     this.writeUint32(sizeBytes);
 
@@ -222,6 +222,7 @@
     this.strings = new StringTable("string");
 
     this.tags.add("any");
+    this.tags.add("array");
     this.tags.add("object");
     this.tags.add("boolean");
     this.tags.add("string");
@@ -569,6 +570,8 @@
 
       case "array":
         writer.writeVarUint32(value.length);
+        if (value.length === 0)
+          return;
 
         // The tree-walker figured out whether we need to use 'any' earlier
         var elementTag = this.arrayTypeTags.get(value);
@@ -634,6 +637,8 @@
       throw new Error("Should have used serializeObject");
 
     writer.writeVarUint32(node.length);
+    if (node.length === 0)
+      return;
 
     var tag = this.arrayTypeTags.get(node);
     if (!tag)
@@ -683,9 +688,10 @@
   JsAstModuleBuilder.prototype = Object.create(AsmlikeJsonTreeBuilder.prototype);  
 
   JsAstModuleBuilder.prototype.finalizeArray = function (array) {
-    var commonTypeTag = null;
+    if (array.length === 0)
+      return;
 
-    this.result.tags.add("array");
+    var commonTypeTag = null;
 
     for (var i = 0, l = array.length; i < l; i++) {
       var item = array[i];
@@ -701,13 +707,16 @@
       if (commonTypeTag === null) {
         commonTypeTag = tag;
       } else if (commonTypeTag !== tag) {
+        console.log("tag mismatch", commonTypeTag, tag);
         commonTypeTag = null;
         break;
       }
     }
     
-    if (commonTypeTag === null)
+    if (commonTypeTag === null) {
+      console.log("any tag fallback for", array);
       commonTypeTag = "any";
+    }
 
     this.result.arrayTypeTags.set(array, commonTypeTag);
 

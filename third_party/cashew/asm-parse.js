@@ -232,6 +232,8 @@
           console.log("empty statement");
       }
     }
+
+    this.builder.finishBlock(block);
   };
 
   Parser.prototype.parseReturnStatement = function () {

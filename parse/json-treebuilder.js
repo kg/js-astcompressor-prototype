@@ -36,17 +36,24 @@
   JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
     var result = this.make(typeTag);
     result.statements = [];
-    return this.finalize(result);
+    return result;
   };
 
   JsonTreeBuilder.prototype.appendToBlock = function (block, statement) {
     block.statements.push(statement);
   };
 
+  // You must call this after you finish appending stuff to a block
+  JsonTreeBuilder.prototype.finishBlock = function (block) {
+    return this.finalize(block);
+  };
+
+  // Note that this isn't finalized yet. Use finishBlock.
   JsonTreeBuilder.prototype.makeTopLevelBlock = function () {
     return this._makeBlock("TopLevel");
   };
 
+  // Note that this isn't finalized yet. Use finishBlock.
   JsonTreeBuilder.prototype.makeBlock = function () {
     return this._makeBlock("Block");
   };
