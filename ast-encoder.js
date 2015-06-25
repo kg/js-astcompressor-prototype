@@ -13,11 +13,12 @@
   var treeBuilder = require("./parse/treebuilder.js");
 
   var AsmlikeJsonTreeBuilder = treeBuilder.AsmlikeJSON;  
-  var NamedTable  = common.NamedTable,
-      UniqueTable = common.UniqueTable,
-      StringTable = common.StringTable,
-      ObjectTable = common.ObjectTable,
-      GetObjectId = common.GetObjectId;
+  var NamedTable   = common.NamedTable,
+      UniqueTable  = common.UniqueTable,
+      StringTable  = common.StringTable,
+      ObjectTable  = common.ObjectTable,
+      GetObjectId  = common.GetObjectId,
+      NextObjectId = common.NextObjectId;
 
   var IoTrace = false;
 
@@ -686,6 +687,20 @@
   };
 
   JsAstModuleBuilder.prototype = Object.create(AsmlikeJsonTreeBuilder.prototype);  
+  var _make = AsmlikeJsonTreeBuilder.prototype.make;
+
+  JsAstModuleBuilder.prototype.make = function (key) {
+    var result = _make.call(this, key);
+
+    // FIXME: This is a slow operation. RIP
+    Object.defineProperty(result, "__id__", {
+      configurable: false,
+      enumerable: false,
+      value: NextObjectId()
+    });
+
+    return result;
+  };
 
   JsAstModuleBuilder.prototype.finalizeArray = function (array) {
     if (array.length === 0)

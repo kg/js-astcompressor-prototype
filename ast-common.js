@@ -424,7 +424,14 @@
   var GetObjectId_table = new WeakMap();
   var GetObjectId_nextId = 0;
 
+  function NextObjectId () {
+    return GetObjectId_nextId++;
+  };
+
   function GetObjectId (obj) {
+    if (typeof (obj.__id__) === "number")
+      return obj.__id__;
+
     if (typeof (obj) !== "object")
       throw new Error("GetObjectId expected object, got '" + typeof (obj) + "'");
     else if (obj === null)
@@ -435,7 +442,7 @@
     if (typeof (existing) === "number")
       return existing;
 
-    var result = GetObjectId_nextId++;
+    var result = NextObjectId();
     GetObjectId_table.set(obj, result);
 
     return result;
@@ -675,7 +682,7 @@
   exports.PrettyJson               = false;
 
   // Disable this for ASTs too large for JSON.stringify
-  exports.DumpJson                 = true;
+  exports.DumpJson                 = false;
 
 
   exports.ShapeDefinition = ShapeDefinition;
@@ -685,7 +692,9 @@
   exports.StringTable = StringTable;
   exports.ObjectTable = ObjectTable;
   exports.ShapeTable  = ShapeTable;
+
   exports.GetObjectId = GetObjectId;
+  exports.NextObjectId = NextObjectId;
 
   exports.pickTagForField = pickTagForField;
 }));

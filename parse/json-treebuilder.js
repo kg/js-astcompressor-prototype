@@ -19,10 +19,14 @@
     this.protos = Object.create(null);
   };
 
+  JsonTreeBuilder.prototype.makeProto = function (type) {
+    return new Object();
+  };
+
   JsonTreeBuilder.prototype.make = function (type) {
     var proto = this.protos[type];
     if (!proto) {
-      this.protos[type] = proto = new Object();
+      this.protos[type] = proto = this.makeProto(type);
       proto.type = type;
     }
 
