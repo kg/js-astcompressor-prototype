@@ -682,18 +682,18 @@
   exports.PrettyJson               = false;
 
   // Disable this for ASTs too large for JSON.stringify
-  exports.DumpJson                 = false;
+  exports.DumpJson                 = true;
 
 
   exports.ShapeDefinition = ShapeDefinition;
 
-  exports.NamedTable  = NamedTable;
-  exports.UniqueTable = UniqueTable;
-  exports.StringTable = StringTable;
-  exports.ObjectTable = ObjectTable;
-  exports.ShapeTable  = ShapeTable;
+  exports.NamedTable   = NamedTable;
+  exports.UniqueTable  = UniqueTable;
+  exports.StringTable  = StringTable;
+  exports.ObjectTable  = ObjectTable;
+  exports.ShapeTable   = ShapeTable;
 
-  exports.GetObjectId = GetObjectId;
+  exports.GetObjectId  = GetObjectId;
   exports.NextObjectId = NextObjectId;
 
   exports.pickTagForField = pickTagForField;

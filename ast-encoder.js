@@ -24,8 +24,8 @@
 
   function ValueWriter (capacity, parent) {
     if (typeof (capacity) !== "number")
-      // HACK: Default max size 32mb because growable buffers are effort
-      capacity = (1024 * 1024) * 32;
+      // HACK: Default max size 128mb because growable buffers are effort
+      capacity = (1024 * 1024) * 128;
 
     this.bytes    = new Uint8Array(capacity);
     this.position = 0;
@@ -409,7 +409,7 @@
 
     this.tags.forEach(function (entry) {
       var tag = entry.get_name();
-      var size = 1024 * 1024 * 4;
+      var size = 1024 * 1024 * 16;
 
       self.valueStreams[tag] = new ValueWriter(size, writer);
     });
