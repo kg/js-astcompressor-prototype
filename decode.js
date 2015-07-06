@@ -17,13 +17,11 @@ var inputFile = process.argv[2];
 var outputFile = process.argv[3];
 var outputAstFile = process.argv[4];
 
-console.time("read webasm");
 var inputBuffer = fs.readFileSync(inputFile), inputBytes;
 if (inputBuffer.toArrayBuffer)
     inputBytes = inputBuffer.toArrayBuffer;
 else
     inputBytes = new Uint8Array(inputBuffer);
-console.timeEnd("read webasm");
 
 var shapes = astDecoder.ShapeTable.fromJson(
   fs.readFileSync("shapes-jsontree.json", { encoding: "utf8" })
@@ -38,9 +36,7 @@ if ((typeof (global) !== "undefined") && global.gc) {
   global.gc();
 }
 
-console.time("moduleToAst");
 var outputAst = astDecoder.moduleToAst(inputModule);
-console.timeEnd("moduleToAst");
 
 console.log("heapUsed " + process.memoryUsage().heapUsed);
 

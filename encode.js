@@ -62,9 +62,7 @@ if (common.DumpJson && outputAstFile) {
   fs.writeFileSync(outputAstFile, json);
 }
 
-console.time("astBuilder.finish");
 var outputModule = astBuilder.finish(inputAst);
-console.timeEnd("astBuilder.finish");
 
 if (true) {
   console.time("deduplicateObjects");
@@ -78,8 +76,6 @@ console.time("serializeModule");
 var bytes = astEncoder.serializeModule(outputModule);
 console.timeEnd("serializeModule");
 
-console.time("write serialized module");
 fs.writeSync(fdOut, new Buffer(bytes), 0, bytes.length);
-console.timeEnd("write serialized module");
 
 fs.closeSync(fdOut);

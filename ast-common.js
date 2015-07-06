@@ -329,9 +329,9 @@
         });
 
         if (this.semantic === "object") {
-          console.log("object table threshold (index=" + cutoff + ") = " + hitCountThreshold);
-
           if (false) {
+            console.log("object table threshold (index=" + cutoff + ") = " + hitCountThreshold);
+
             for (var i = 0; i < result.length; i++) {
               console.log(i, result[i].entry.hitCount, result[i].entry.order);
             }
@@ -524,7 +524,7 @@
 
       if (!table) {
         // HACK: Type (virtual base?) without shape
-        if (!nags[declaredType]) {
+        if (false && !nags[declaredType]) {
           nags[declaredType] = true;
           console.log("'object' fallback for " + declaredType);
         }
