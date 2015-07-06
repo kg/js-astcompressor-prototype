@@ -1,5 +1,7 @@
 /Test
 *.gz
 *.lzham
+*.brotli
 third_party/lzhamtest
 third_party/7z.exe
+third_party/bro

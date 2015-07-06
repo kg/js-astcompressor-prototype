@@ -76,12 +76,12 @@ if (common.DumpJson && outputAstFile) {
 var outputModule = astBuilder.finish(inputAst);
 
 if (common.DeduplicateObjects) {
-  console.log("nodes early-deduplicated: " + astBuilder.nodesPruned);
-  /*
-  console.time("deduplicateObjects");
-  outputModule.deduplicateObjects();
-  console.timeEnd("deduplicateObjects");
-  */
+  console.log(
+    "Early-deduplicated " + astBuilder.nodesPruned + 
+    " node(s) (" + 
+    (astBuilder.nodesPruned / astBuilder.nodesFinalized * 100)
+      .toFixed(1) + "%)"
+  );
 }
 
 // TODO: Deduplicate arrays?
