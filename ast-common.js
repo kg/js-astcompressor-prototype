@@ -637,53 +637,57 @@
   };
 
   // Prune duplicate objects before serializing a module.
-  exports.DeduplicateObjects       = true;
+  exports.DeduplicateObjects          = true;
+
+  // At least this many identical nodes must exist for a node
+  //  to be deduplicated.
+  exports.DeduplicationUsageThreshold = 1;
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints            = true;
+  exports.EnableVarints               = true;
 
   // Sorts the object table to reduce the average size of varints,
   //  and potentially improve stream compression in general.
-  exports.SortTables               = true;
+  exports.SortTables                  = true;
   // Two-pass object table sort. Highest frequency use objects
   //  at the front of the table, then lower frequency use objects
   //  sorted sequentially to improve locality (and compression?)
-  exports.LocalityAwareSorting     = true;
+  exports.LocalityAwareSorting        = true;
   // Tables over this size use the larger locality cutoff.
   // Roughly, we want to use this as a heuristic for cases
   //  where indexes would otherwise frequently be 3 bytes
   //  and hitcount sorting can reduce them to 2.
-  exports.LargeTableThreshold      = 1 << 13;
+  exports.LargeTableThreshold         = 1 << 13;
   // How many items at the front of the table (hitcount sorted)
   // Small is used for 'small' tables (see above), large etc
-  exports.LocalityCutoffSmall      = 128;
-  exports.LocalityCutoffLarge      = 1 << 13;
+  exports.LocalityCutoffSmall         = 128;
+  exports.LocalityCutoffLarge         = 1 << 13;
   // How low can the minimum hitcount be
-  exports.LocalityMinimumThreshold = 3;
+  exports.LocalityMinimumThreshold    = 3;
 
   // If set to an integer, objects with this # of uses or
   //  less are encoded inline.
-  exports.InlineUseCountThreshold  = null;
+  exports.InlineUseCountThreshold     = null;
 
-  exports.ConditionalInlining      = !!exports.InlineUseCountThreshold;
+  exports.ConditionalInlining         = !!exports.InlineUseCountThreshold;
 
   // Encode indexes as signed values relative to the index of
   //  the current object.
-  exports.RelativeIndexes          = false;
+  exports.RelativeIndexes             = false;
 
   // Separate sequential streams of values, partitioned by type.
-  exports.ValueStreamPerType       = true;
+  exports.ValueStreamPerType          = true;
 
   // If varints are disabled, writes indices as 3-byte uints
-  exports.ThreeByteIndices         = false;
+  exports.ThreeByteIndices            = false;
 
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is
   //  super busted for large objects.
-  exports.PrettyJson               = false;
+  exports.PrettyJson                  = false;
 
   // Disable this for ASTs too large for JSON.stringify
-  exports.DumpJson                 = true;
+  exports.DumpJson                    = false;
 
 
   exports.ShapeDefinition = ShapeDefinition;
