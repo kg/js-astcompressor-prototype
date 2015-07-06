@@ -806,11 +806,6 @@
     var writer = new ValueWriter();
 
     writer.writeBytes(common.Magic);
-    writer.writeUtf8String(common.FormatName);
-
-    /*
-    module.serializeTable(writer, module.identifiers, serializeUtf8String);
-    */
 
     module.finalize();
 

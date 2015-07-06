@@ -636,7 +636,8 @@
     "boolean": true
   };
 
-  exports.FormatName               = "asmparse-jsontreebuilder-compressed-v3";
+  // Prune duplicate objects before serializing a module.
+  exports.DeduplicateObjects       = true;
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
   exports.EnableVarints            = true;

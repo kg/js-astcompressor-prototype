@@ -194,7 +194,7 @@
   Parser.prototype.parseTopLevel = function () {
     var result = this.builder.makeTopLevelBlock();
 
-    this.parseBlockInterior(result);
+    result = this.parseBlockInterior(result);
 
     if (this.readToken())
       return this.abort("Top-level parsing aborted too early");
@@ -205,7 +205,10 @@
   // parses the interior of a multi-statement block (i.e. the { has been consumed)
   // aborts at eof or uneven } (end of multi-statement block)
   Parser.prototype.parseBlockInterior = function (block) {
-    if (!block || !block.statements)
+    if (!block)
+      block = this.builder.makeBlock();
+
+    if (!block.statements)
       return this.abort("Expected a block argument");
 
     var abortedBy = null;
@@ -233,7 +236,7 @@
       }
     }
 
-    this.builder.finishBlock(block);
+    return this.builder.finishBlock(block);
   };
 
   Parser.prototype.parseReturnStatement = function () {
@@ -280,8 +283,8 @@
   Parser.prototype.parseTryStatement = function () {
     this.expectToken("separator", "{");
 
-    var body = this.builder.makeBlock(), catchBlock = null, finallyBlock = null, catchExpr = null;
-    this.parseBlockInterior(body);
+    var body, catchBlock = null, finallyBlock = null, catchExpr = null;
+    body = this.parseBlockInterior();
 
     var maybeCatchOrFinally;
     while (maybeCatchOrFinally = this.readToken()) {
@@ -296,13 +299,11 @@
             return this.abort("Expected expression inside (catch)");
 
           this.expectToken("separator", "{");
-          catchBlock = this.builder.makeBlock();
-          this.parseBlockInterior(catchBlock);
+          catchBlock = this.parseBlockInterior();
 
         } else if (maybeCatchOrFinally.value === "finally") {
           this.expectToken("separator", "{");
-          finallyBlock = this.builder.makeBlock();
-          this.parseBlockInterior(finallyBlock);
+          finallyBlock = this.parseBlockInterior();
 
           break;
         } else {
@@ -423,8 +424,7 @@
       }
 
       newCaseType = null;
-      var body = this.builder.makeBlock();
-      this.parseBlockInterior(body);
+      var body = this.parseBlockInterior();
 
       cases.push(this.builder.makeSwitchCase(caseKey, body));
     }
@@ -562,8 +562,7 @@
 
     this.expectToken("separator", "{");
 
-    var body = this.builder.makeBlock();
-    this.parseBlockInterior(body);
+    var body = this.parseBlockInterior();
 
     if (TraceStatements)
       console.log("end of function", name);
@@ -1161,9 +1160,7 @@
       (token.type === "separator") &&
       (token.value === "{")
     ) {
-      var childBlock = this.builder.makeBlock();
-
-      this.parseBlockInterior(childBlock);
+      var childBlock = this.parseBlockInterior();
 
       return childBlock;
     } else {
@@ -1205,9 +1202,7 @@
               //  correctly.
               // FIXME: How do we distinguish between a free-standing object literal,
               //  and a block scope?
-              var childBlock = this.builder.makeBlock();
-
-              this.parseBlockInterior(childBlock);
+              var childBlock = this.parseBlockInterior();
 
               return childBlock;
 

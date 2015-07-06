@@ -433,12 +433,6 @@
       throw new Error("Magic header does not match");
     }
 
-    var formatName = reader.readUtf8String();
-    if (formatName !== common.FormatName) {
-      console.log(formatName, common.FormatName);
-      throw new Error("Format name does not match");
-    }
-
     var result = new JsAstModule(shapes);
 
     // The lengths are stored in front of the tables themselves,

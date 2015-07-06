@@ -11,7 +11,9 @@
 }(this, function (exports) {
   var jsonTreeBuilder = require("./json-treebuilder.js");
   var asmlikeJsonTreeBuilder = require("./asmlike-json-treebuilder.js");
+  var deduplicating = require("./deduplicating.js");
 
   exports.JSON = jsonTreeBuilder.Builder;
   exports.AsmlikeJSON = asmlikeJsonTreeBuilder.Builder;
+  exports.MakeDeduplicating = deduplicating.MakeBuilder;
 }));
