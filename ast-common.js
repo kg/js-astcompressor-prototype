@@ -687,7 +687,7 @@
   exports.PrettyJson                  = false;
 
   // Disable this for ASTs too large for JSON.stringify
-  exports.DumpJson                    = false;
+  exports.DumpJson                    = true;
 
 
   exports.ShapeDefinition = ShapeDefinition;

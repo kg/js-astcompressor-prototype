@@ -33,7 +33,8 @@ var astBuilder;
 if (common.DeduplicateObjects) {
   var deduplicatingModuleBuilder = treeBuilder.MakeDeduplicating(
     astEncoder.JsAstModuleBuilder,
-    common.GetObjectId
+    common.GetObjectId,
+    common.DeduplicationUsageThreshold
   );
   astBuilder = new deduplicatingModuleBuilder(shapes);
 } else {

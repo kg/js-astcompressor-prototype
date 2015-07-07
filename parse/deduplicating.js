@@ -9,7 +9,14 @@
     factory((root.deduplicatingTreeBuilder = {}));
   }
 }(this, function (exports) {
-  function MakeBuilder (baseClass, getObjectId) {
+  function InternTableEntry (hash, node) {
+    this.hash = hash;
+    this.node = node;
+    this.useCount = 1;
+  };
+
+
+  function MakeBuilder (baseClass, getObjectId, deduplicationUsageThreshold) {
     var ctor = function (/* ... */) {
       this.internTable = Object.create(null);
       this.nodesFinalized = 0;
@@ -75,10 +82,16 @@
 
       var interned = table[bruteForceHash];
       if (interned) {
-        this.nodesPruned += 1;
-        return interned;
-      } else
-        table[bruteForceHash] = obj;
+        var shouldDeduplicate = interned.useCount >= deduplicationUsageThreshold
+        interned.useCount += 1;
+
+        if (shouldDeduplicate) {
+          this.nodesPruned += 1;
+          return interned.node;
+        }
+      } else {
+        table[bruteForceHash] = new InternTableEntry(bruteForceHash, obj);
+      }
 
       return baseClass.prototype.finalize.call(this, obj);
     };
