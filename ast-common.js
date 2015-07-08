@@ -613,7 +613,7 @@
   exports.DeduplicationUsageThreshold = 1;
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints               = false;
+  exports.EnableVarints               = true;
 
   // Sorts the object table to reduce the average size of varints,
   //  and potentially improve stream compression in general.
@@ -636,7 +636,7 @@
 
   // If set to an integer, objects with this # of uses or
   //  less are encoded inline.
-  exports.InlineUseCountThreshold     = 0;
+  exports.InlineUseCountThreshold     = 1;
 
   exports.ConditionalInlining         = !!exports.InlineUseCountThreshold;
 
