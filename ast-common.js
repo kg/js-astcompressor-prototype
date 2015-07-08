@@ -659,6 +659,9 @@
   // If varints are disabled, writes indices as 3-byte uints
   exports.ThreeByteIndices            = false;
 
+  // Null-terminated strings instead of length headers
+  exports.NullTerminatedStrings       = false;
+
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is
   //  super busted for large objects.

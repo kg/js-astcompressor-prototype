@@ -171,16 +171,30 @@
   };
 
   ValueReader.prototype.readUtf8String = function () {
-    var length = this.readVarUint32();
-    if (length === false)
-      return false;
+    var length = 0, position;
 
-    if (length === 0)
-      return "";
+    if (!common.NullTerminatedStrings) {
+      length = this.readVarUint32();
+      if (length === false)
+        return false;
 
-    var result = encoding.UTF8.decode(this.bytes, this.byteReader.getPosition(), length);
+      if (length === 0)
+        return "";
 
-    this.byteReader.skip(length);
+      position = this.byteReader.getPosition();
+
+    } else {
+      var b;
+
+      position = this.byteReader.getPosition();
+      while (Number(b = this.readByte()) > 0)
+        length++;
+    }
+
+    var result = encoding.UTF8.decode(this.bytes, position, length);
+
+    if (!common.NullTerminatedStrings)
+      this.byteReader.skip(length);
 
     return result;
   };

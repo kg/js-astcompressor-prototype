@@ -203,8 +203,13 @@
     // Encode but discard bytes to compute length
     encoding.UTF8.encode(text, counter);
 
-    this.writeVarUint32(lengthBytes);
+    if (!common.NullTerminatedStrings)
+      this.writeVarUint32(lengthBytes);
+
     encoding.UTF8.encode(text, this);
+
+    if (common.NullTerminatedStrings)
+      this.writeByte(0);
   };
 
   ValueWriter.prototype.writeSubstream = function (otherWriter, description) {
