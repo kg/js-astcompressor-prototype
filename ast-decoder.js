@@ -294,6 +294,9 @@
       if (inlinedFlag === 2) {
         return null;
       } else if (inlinedFlag === 1) {
+        if (common.ValueStreamPerType && common.PartitionedInlining)
+          reader = module.valueStreams[tag];
+
         var result = new Object();
         deserializeObjectContents(reader, module, result, null, true);
         return result;
@@ -357,6 +360,12 @@
 
 
   function getReaderForField (defaultReader, module, field, tag) {
+    if (common.ValueStreamPerType && common.PartitionedInlining) {
+      var shape = module.shapes.get(tag);
+      if (shape || (tag === "object"))
+        return defaultReader;
+    } 
+
     if (common.ValueStreamPerType) {
       var reader = module.valueStreams[tag];
       if (!reader)

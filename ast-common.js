@@ -638,7 +638,13 @@
   //  less are encoded inline.
   exports.InlineUseCountThreshold     = 1;
 
+  // See above
   exports.ConditionalInlining         = !!exports.InlineUseCountThreshold;
+
+  // If conditional inlining is active, writes inlined nodes
+  //  into their value streams instead of into the current stream
+  // FIXME: Totally busted
+  exports.PartitionedInlining         = false;
 
   // Encode indexes as signed values relative to the index of
   //  the current object.

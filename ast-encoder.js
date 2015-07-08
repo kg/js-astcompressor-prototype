@@ -337,13 +337,14 @@
   };
 
 
-  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex) {
+  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex, overrideWriter) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
     try {
-      var specializedWriter = this.getValueWriterForField(writer, field, tag);
-      this.serializeValueWithKnownTag(specializedWriter, value, tag, baseIndex);
+      if (!overrideWriter)
+        writer = this.getValueWriterForField(writer, field, tag);
+      this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
     } catch (exc) {
       console.log("Failed while writing field " + field.name + " of type " + shape.name);
       throw exc;
@@ -364,10 +365,16 @@
     
     this.writeTypeTag(writer, shape.tagIndex);
 
+    var shouldOverride = false;
     if (isInline) {
       var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
       if (trace)
         console.log("Inlined", shape.name, shape.tagIndex.toString(16));
+
+      if (common.ValueStreamPerType && common.PartitionedInlining) {
+        writer = this.valueStreams[shape.name];
+        shouldOverride = true;
+      }
     }
 
     var self = this, fields = shape.shape.fields;
@@ -378,7 +385,9 @@
       if (typeof (value) === "undefined")
         value = null;
 
-      this.serializeFieldValue(writer, shape, fd, value, index);
+      this.serializeFieldValue(
+        writer, shape, fd, value, index, shouldOverride
+      );
 
       if (IoTrace)
         console.log("// " + fd.name + " =", value);      

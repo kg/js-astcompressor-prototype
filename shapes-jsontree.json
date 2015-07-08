@@ -68,27 +68,27 @@
     },
     "LabelStatement": {
       "labels": ["string"],
-      "labelled": "Statement"
+      "labelled": "Statement | Expression"
     },
     "ForStatement": {
       "initialize": "Expression?",
       "update": "Expression?",
       "condition": "Expression?",
-      "body": "Statement"
+      "body": "Block | Statement"
     },
     "WhileStatement": {
       "condition": "Expression",
-      "body": "Statement"
+      "body": "Block | Statement"
     },
     "DoWhileStatement": {
       "condition": "Expression",
-      "body": "Statement"
+      "body": "Block | Statement"
     },
     "TryStatement": {
-      "body": "Block",
+      "body": "Block | Statement",
       "catchExpression": "Expression?",
-      "catchBlock": "Block?",
-      "finallyBlock": "Block?"
+      "catchBlock": "Block? | Statement?",
+      "finallyBlock": "Block? | Statement?"
     },
     "ForInDeclaration": {
       "variableName": "string",
@@ -96,7 +96,7 @@
     },
     "ForInStatement": {
       "declaration": "ForInDeclaration",
-      "body": "Statement"
+      "body": "Statement | Expression"
     },
     "SwitchStatement": {
       "value": "Expression",
@@ -104,7 +104,7 @@
     },
     "SwitchCase": {
       "value": "Expression?",
-      "body": "Block?"
+      "body": "Block? | Statement?"
     },
     "PostfixMutation": {
       "operator": "string",
@@ -141,12 +141,12 @@
       "argumentValues": ["Expression"]
     },
     "Block": {
-      "statements": ["Statement"]
+      "statements": ["Statement | Expression"]
     },
     "IfStatement": {
       "condition": "Expression",
-      "trueStatement": "Statement",
-      "falseStatement": "Statement?"
+      "trueStatement": "Block | Statement",
+      "falseStatement": "Block? | Statement?"
     },
     "Function": {
       "name": "string?",
