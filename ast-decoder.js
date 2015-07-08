@@ -19,6 +19,7 @@
 
   var IoTrace = false;
   var TraceInlining = false;
+  var TraceInlinedTypeCount = 0;
 
 
   function ValueReader (bytes, index, count) {
@@ -35,7 +36,12 @@
   };
 
   ValueReader.prototype.readByte = function () {
-    return this.byteReader.read();
+    var result = this.byteReader.read();
+
+    if (IoTrace)
+      console.log("read  byte", result.toString(16));
+
+    return result;
   };
 
   ValueReader.prototype.readBytes = function (buffer, offset, count) {
@@ -64,12 +70,16 @@
   };
 
   ValueReader.prototype.readUint32 = function () {
+    var b1 = this.byteReader.peek(0),
+        b2 = this.byteReader.peek(1),
+        b3 = this.byteReader.peek(2);
+
     if (!this.readScratchBytes(4))
       return false;
 
     var result = this.scratchU32[0];
     if (IoTrace)
-      console.log("read  uint", result.toString(16));
+      console.log("read  uint", result.toString(16), "[" + b1.toString(16) + " " + b2.toString(16) + " " + b3.toString(16) + "]");
     return result;
   };
 
@@ -96,6 +106,10 @@
   };
 
   ValueReader.prototype.readVarUint32 = function () {
+    var b1 = this.byteReader.peek(0),
+        b2 = this.byteReader.peek(1),
+        b3 = this.byteReader.peek(2);
+
     if (!common.EnableVarints) {
       if (common.ThreeByteIndices)
         return this.readUint24();
@@ -105,7 +119,7 @@
 
     var result = common.readLEBUint32(this.byteReader);
     if (IoTrace)
-      console.log("read  varuint", result.toString(16));
+      console.log("read  varuint", result.toString(16), "[" + b1.toString(16) + " " + b2.toString(16) + " " + b3.toString(16) + "]");
     return result;
   };
 
@@ -261,24 +275,23 @@
 
     objectTable = module.objects;
 
-    if (common.ConditionalInlining) {
-      var leadingByte = reader.peekByte(0);
+    var shouldConditionalInline = 
+      common.ConditionalInlining &&
+      (tag !== "any") &&
+      (tag !== "string");
 
-      if (leadingByte === common.InliningMarker) {
-        reader.readByte();
+    if (shouldConditionalInline) {
+      var inlinedFlag = module.inliningStream.readByte();
+      if (TraceInlining)
+        console.log("INLINED=" + inlinedFlag + " " + tag);
 
-        if (isUntypedObject) {
-          tag = readTypeTag(reader, module);
-          if (TraceInlining)
-            console.log("reading untyped " + tag + " inline");
-        } else {
-          if (TraceInlining)
-            console.log("reading " + tag + " inline");
-        }
-
+      if (inlinedFlag === 2) {
+        return null;
+      } else if (inlinedFlag === 1) {
         var result = new Object();
-        deserializeObjectContents(reader, module, result, null);
+        deserializeObjectContents(reader, module, result, null, true);
         return result;
+      } else {
       }
     }
 
@@ -365,11 +378,17 @@
   };
 
 
-  function deserializeObjectContents (reader, module, obj, index) {
+  function deserializeObjectContents (reader, module, obj, index, isInline) {
     var shapeName = readTypeTag(reader, module);
 
     if (IoTrace)
       console.log("// object body #" + index);
+
+    if (isInline) {
+      var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
+      if (trace)
+        console.log("reading inlined " + shapeName);
+    }
 
     var shape = module.shapes.get(shapeName);
     if (!shape)
@@ -475,6 +494,9 @@
       return text;
     };
 
+    if (common.ConditionalInlining)
+      result.inliningStream = reader.readSubstream();
+
     console.time("  read tags");
     var tagReader    = reader.readSubstream();
     result.tags = deserializeTable(tagReader, readUtf8String);
@@ -501,6 +523,7 @@
 
 
     console.time("  read objects");
+
     var objectReader = reader.readSubstream();
     deserializeObjectTable(objectReader, result);
     console.timeEnd("  read objects");

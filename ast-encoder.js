@@ -22,6 +22,7 @@
 
   var IoTrace = false;
   var TraceInlining = false;
+  var TraceInlinedTypeCount = 0;
 
   function ValueWriter (capacity, parent) {
     if (typeof (capacity) !== "number")
@@ -50,6 +51,9 @@
   ValueWriter.prototype.writeByte = function (b) {
     if (this.position >= this.bytes.length)
       throw new Error("buffer full");
+
+    if (IoTrace)
+      console.log("write byte", b.toString(16));
 
     this.bytes[this.position++] = b;
   };
@@ -90,10 +94,13 @@
   };
 
   ValueWriter.prototype.writeUint32 = function (value) {
-    if (IoTrace)
-      console.log("write uint", value.toString(16));
-
     this.view.setUint32(this.position, value, true);
+
+    if (IoTrace)
+      console.log("write uint", value.toString(16), 
+        "[" + this.bytes[this.position].toString(16) + " " + this.bytes[this.position + 1].toString(16) + " " + this.bytes[this.position + 2].toString(16) + "]"
+      );
+
     this.position += 4;
   };
 
@@ -115,6 +122,9 @@
       var after = this.position;
       var lengthBytes = after - before;
       this.varintSizes[lengthBytes - 1] += 1;
+
+      // HACK for checking inlining markers
+      return this.bytes[before];
     } else if (common.ThreeByteIndices) {
       this.writeUint24(value);
     } else {
@@ -132,6 +142,9 @@
       var after = this.position;
       var lengthBytes = after - before;
       this.varintSizes[lengthBytes - 1] += 1;
+
+      // HACK for checking inlining markers
+      return this.bytes[before];
     } else {
       this.writeInt32(value);
     }
@@ -323,7 +336,7 @@
   };
 
 
-  JsAstModule.prototype.serializeObject = function (writer, node, index) {
+  JsAstModule.prototype.serializeObject = function (writer, node, index, isInline) {
     if (Array.isArray(node))
       throw new Error("Should have used serializeArray");
 
@@ -335,6 +348,12 @@
       console.log("// object body #" + index);
     
     writer.writeVarUint32(shape.tagIndex);
+
+    if (isInline) {
+      var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
+      if (trace)
+        console.log("Inlined", shape.name, shape.tagIndex.toString(16));
+    }
 
     var self = this, fields = shape.shape.fields;
     for (var i = 0, l = fields.length; i < l; i++) {
@@ -471,8 +490,20 @@
         break;
     }
 
+    var shouldConditionalInline = 
+      common.ConditionalInlining &&
+      (tag !== "any") &&
+      (tag !== "string");
+
     if (value === null) {
-      writer.writeIndex(0xFFFFFFFF);
+      if (shouldConditionalInline) {
+        if (TraceInlining)
+          console.log("INLINED=2 " + tag);
+
+        this.inliningWriter.writeByte(2);
+      } else {
+        writer.writeIndex(0xFFFFFFFF);
+      }
       return;
     }
 
@@ -497,29 +528,33 @@
       var id = table.get_id(value);
       var index = id.get_index();
 
-      if (id.is_omitted()) {
-        var name = id.get_name();
-        var shape = this.getShapeForObject(value);
-        if (shape) {
-          // HACK
-          writer.writeByte(common.InliningMarker);
+      if (shouldConditionalInline) {
+        if (id.is_omitted()) {
+          if (TraceInlining)
+            console.log("INLINED=1 " + tag);
 
-          if (isUntypedObject) {
-            var inlineTag = this.getTypeTagForValue(value);
-            var inlineTagIndex = this.getIndexForTypeTag(tag);
-            writer.writeVarUint32(inlineTagIndex);
-            if (TraceInlining)
-              console.log("Inlined untyped", shape.name, name);
+          this.inliningWriter.writeByte(1);
+
+          var name = id.get_name();
+          var shape = this.getShapeForObject(value);
+          if (shape) {
+            // HACK
+            var prior = IoTrace;
+            if (TraceInlining || (TraceInlinedTypeCount > 0))
+              IoTrace = false;
+
+            this.serializeObject(writer, value, index || null, true);
+            IoTrace = prior;
+
+            return;
           } else {
-            if (TraceInlining)
-              console.log("Inlined", shape.name, name);
+            throw new Error("Object without shape was omitted");
           }
-
-          this.serializeObject(writer, value, index || null);
-
-          return;
         } else {
-          throw new Error("Object without shape was omitted");
+          if (TraceInlining)
+            console.log("INLINED=0 " + tag);
+
+          this.inliningWriter.writeByte(0);
         }
       }
 
@@ -751,6 +786,9 @@
     writer.writeUint32(stringCount);
     writer.writeUint32(objectCount);
 
+    if (common.ConditionalInlining)
+      module.inliningWriter = new ValueWriter(1024 * 1024 * 4, writer);
+
     var tagWriter = new ValueWriter(1024 * 1024 * 1, writer);
     module.serializeTable(tagWriter, module.tags, true, function (_, value) {
       _.writeUtf8String(value);
@@ -767,6 +805,8 @@
     var objectWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
 
+    if (common.ConditionalInlining)
+      writer.writeSubstream(module.inliningWriter, "inlining flags");
     writer.writeSubstream(tagWriter, "tags");
     writer.writeSubstream(stringWriter, "strings");
 
@@ -776,6 +816,7 @@
       writer.writeIndex(module.tags.get_index(key));      
       writer.writeSubstream(valueStream, "values[" + key + "]");
     }
+
 
     writer.writeSubstream(objectWriter, "objects");
 
