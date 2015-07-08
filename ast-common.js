@@ -636,13 +636,16 @@
 
   // If set to an integer, objects with this # of uses or
   //  less are encoded inline.
-  exports.InlineUseCountThreshold     = 1;
+  exports.InlineUseCountThreshold     = 0;
 
   exports.ConditionalInlining         = !!exports.InlineUseCountThreshold;
 
   // Encode indexes as signed values relative to the index of
   //  the current object.
   exports.RelativeIndexes             = false;
+
+  // Separate sequential stream for all type tags
+  exports.TypeTagStream               = false;
 
   // Separate sequential streams of values, partitioned by type.
   exports.ValueStreamPerType          = true;

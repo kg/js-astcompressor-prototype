@@ -208,6 +208,8 @@
     this.shapes  = shapes;
 
     this.valueStreams = Object.create(null);
+    this.typeTagStream = null;
+    this.inliningStream = null;
 
     this.tags    = null;
     this.strings = null;
@@ -219,6 +221,9 @@
 
 
   function readTypeTag (reader, module) {
+    if (common.TypeTagStream)
+      reader = module.typeTagStream;
+
     var tagIndex = reader.readVarUint32();
     if (tagIndex === false)
       throw new Error("Truncated file");
@@ -494,9 +499,6 @@
       return text;
     };
 
-    if (common.ConditionalInlining)
-      result.inliningStream = reader.readSubstream();
-
     console.time("  read tags");
     var tagReader    = reader.readSubstream();
     result.tags = deserializeTable(tagReader, readUtf8String);
@@ -507,6 +509,13 @@
     var stringReader = reader.readSubstream();
     result.strings = deserializeTable(stringReader, readUtf8String);
     console.timeEnd("  read string tables");
+
+
+    if (common.ConditionalInlining)
+      result.inliningStream = reader.readSubstream();
+
+    if (common.TypeTagStream)
+      result.typeTagStream = reader.readSubstream();
 
 
     if (common.ValueStreamPerType)

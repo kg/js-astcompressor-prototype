@@ -247,6 +247,8 @@
     this.objects = new ObjectTable("object");
 
     this.valueStreams = Object.create(null);
+    this.inliningWriter = null;
+    this.typeTagWriter = null;
 
     this.anyTypeValuesWritten = 0;
 
@@ -322,6 +324,15 @@
   };
 
 
+  JsAstModule.prototype.writeTypeTag = function (defaultWriter, tag) {
+    var writer = defaultWriter;
+    if (common.TypeTagStream)
+      writer = this.typeTagWriter;
+
+    writer.writeVarUint32(tag);
+  };
+
+
   JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
@@ -347,7 +358,7 @@
     if (IoTrace)
       console.log("// object body #" + index);
     
-    writer.writeVarUint32(shape.tagIndex);
+    this.writeTypeTag(writer, shape.tagIndex);
 
     if (isInline) {
       var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
@@ -463,7 +474,7 @@
 
         this.anyTypeValuesWritten += 1;
         var tagIndex = this.getIndexForTypeTag(tag);
-        writer.writeVarUint32(tagIndex);
+        this.writeTypeTag(writer, tagIndex);
 
         return this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
       }
@@ -476,7 +487,7 @@
         // The tree-walker figured out whether we need to use 'any' earlier
         var elementTag = this.arrayTypeTags.get(value);
         var elementTagIndex = this.getIndexForTypeTag(elementTag);
-        writer.writeVarUint32(elementTagIndex);
+        this.writeTypeTag(writer, elementTagIndex);
 
         for (var i = 0; i < value.length; i++) {
           var element = value[i];
@@ -589,7 +600,7 @@
       throw new Error("No precomputed type tag for array");
 
     var tagIndex = this.getIndexForTypeTag(tag);
-    writer.writeVarUint32(tagIndex);
+    this.writeTypeTag(writer, tagIndex);
 
     // FIXME: Use relative indexes here?
     for (var i = 0, l = node.length; i < l; i++) {
@@ -786,9 +797,6 @@
     writer.writeUint32(stringCount);
     writer.writeUint32(objectCount);
 
-    if (common.ConditionalInlining)
-      module.inliningWriter = new ValueWriter(1024 * 1024 * 4, writer);
-
     var tagWriter = new ValueWriter(1024 * 1024 * 1, writer);
     module.serializeTable(tagWriter, module.tags, true, function (_, value) {
       _.writeUtf8String(value);
@@ -799,16 +807,27 @@
       _.writeUtf8String(value);
     });
 
+    if (common.ConditionalInlining)
+      module.inliningWriter = new ValueWriter(1024 * 1024 * 4, writer);
+
+    if (common.TypeTagStream)
+      module.typeTagWriter = new ValueWriter(1024 * 1024 * 4, writer);
+
     if (common.ValueStreamPerType)
       module.createValueStreams(writer);
 
     var objectWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
+    writer.writeSubstream(tagWriter, "tags");
+    writer.writeSubstream(stringWriter, "strings");
+
 
     if (common.ConditionalInlining)
       writer.writeSubstream(module.inliningWriter, "inlining flags");
-    writer.writeSubstream(tagWriter, "tags");
-    writer.writeSubstream(stringWriter, "strings");
+
+    if (common.TypeTagStream)
+      writer.writeSubstream(module.typeTagWriter, "type tags");
+
 
     if (common.ValueStreamPerType)
     for (var key in module.valueStreams) {
