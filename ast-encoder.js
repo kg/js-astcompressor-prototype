@@ -237,7 +237,9 @@
 
     // Used to store the inferred type tags for arrays during
     //  the initial tree-walk
-    this.arrayTypeTags = new WeakMap();
+    this.arrayTypeTags     = new WeakMap();
+    // Used to cache the result of the 'shape small enough to always inline' check
+    this.isShapeSmallCache = new WeakMap();
 
     this.tags    = new StringTable("tag");
     this.strings = new StringTable("string");
@@ -260,6 +262,53 @@
     this.typeTagsWritten = 0;
 
     this._getTableForTypeTag = this.getTableForTypeTag.bind(this);
+  };
+
+
+  JsAstModule.prototype.isShapeSmall = function (shape) {
+    if (typeof (common.InlineObjectSizeThreshold) !== "number")
+      return false;
+
+    var result = this.isShapeSmallCache.get(shape);
+    if (typeof (result) === "boolean")
+      return result;
+
+    var estimatedIndexSize = 
+      common.EnableVarints
+        ? 3 // FIXME: 2?
+        : 4;
+
+    // Type tag
+    var size = estimatedIndexSize;
+    // Inlining flag
+    if (common.ConditionalInlining)
+      size += 1;
+
+    for (var i = 0, l = shape.shape.fields.length; i < l; i++) {
+      var fd = shape.shape.fields[i];
+
+      switch (fd.type) {
+        case "integer":
+          size += 4;
+          break;
+
+        case "double":
+          size += 8;
+          break;
+
+        case "boolean":
+          size += 1;
+          break;
+
+        default:
+          size += estimatedIndexSize;
+          break;
+      }
+    }
+
+    result = (size <= common.InlineObjectSizeThreshold);
+    this.isShapeSmallCache.set(shape, result);
+    return result;
   };
 
 
@@ -765,12 +814,19 @@
 
     writer.writeBytes(common.Magic);
 
-    var omitCount = 0;
+    var omitCount = 0, totalCount = module.objects.get_count();
     if (common.ConditionalInlining) {
+      var self = this;
       var maybeOmitCallback = function (id) {
         var hitCount = id.get_hit_count();
+        var shape = module.getShapeForObject(id.get_value());
+        var omitDueToHitCount = hitCount <= common.InlineUseCountThreshold,
+          omitDueToSize = false;
 
-        if (hitCount <= common.InlineUseCountThreshold) {
+        if (shape)
+          omitDueToSize = module.isShapeSmall(shape);
+
+        if (omitDueToHitCount || omitDueToSize) {
           module.objects.omit(id);
           omitCount += 1;
         }
@@ -843,7 +899,7 @@
     writer.writeSubstream(rootWriter, "root");
 
     if (omitCount > 0)
-      console.log("objects written inline:", omitCount);
+      console.log("objects written inline:", omitCount, "(" + (omitCount * 100 / totalCount).toFixed(1) + "%)");
 
     if (common.TypeTagStream)
       console.log("type tags written:", module.typeTagsWritten);

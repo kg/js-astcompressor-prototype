@@ -250,6 +250,11 @@
       throw new Error("Count mismatch");
     }
 
+    if (result.length === 0) {
+      this.isFinalized = true;
+      return result;
+    }
+
     if (exports.SortTables) {
       // First pass: sort by usage count so most frequently
       //  used objects have low (small) indices.
@@ -270,9 +275,11 @@
           isLargeTable
             ? exports.LocalityCutoffLarge
             : exports.LocalityCutoffSmall;
+        if (cutoff < 0)
+          cutoff = 0;
 
         var thresholdIndex = Math.min(
-          this.count - 1,
+          result.length - 1,
           cutoff - 1
         );
 
@@ -636,10 +643,13 @@
 
   // If set to an integer, objects with this # of uses or
   //  less are encoded inline.
-  exports.InlineUseCountThreshold     = 1;
+  exports.InlineUseCountThreshold     = 10;
+
+  // If an object's estimated size is <= this, always inline it
+  exports.InlineObjectSizeThreshold   = null; // 7;
 
   // See above
-  exports.ConditionalInlining         = !!exports.InlineUseCountThreshold;
+  exports.ConditionalInlining         = exports.InlineUseCountThreshold !== null;
 
   // If conditional inlining is active, writes inlined nodes
   //  into their value streams instead of into the current stream
