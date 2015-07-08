@@ -186,6 +186,7 @@
   };
 
   ValueReader.prototype.readSubstream = function () {
+    var description = this.readUtf8String();
     var length = this.readUint32();
 
     var result = new ValueReader(this.bytes, this.byteReader.getPosition(), length);
@@ -352,21 +353,6 @@
     }
 
     throw new Error("unexpected");
-  };
-
-
-  function deserializeArrayContents (reader, module, arr, index) {
-    var count = reader.readVarUint32();
-    
-    if (count > 0) {
-      var elementTypeTag = readTypeTag(reader, module);
-
-      // Stream of tagged values
-      for (var i = 0; i < count; i++) {
-        var value = deserializeValueWithKnownTag(reader, module, elementTypeTag, null);
-        arr[i] = value;
-      }
-    }
   };
 
 
@@ -537,7 +523,9 @@
     deserializeObjectTable(objectReader, result);
     console.timeEnd("  read objects");
 
-    result.root = deserializeValueWithKnownTag(reader, result, "any", null);
+    var rootReader = reader.readSubstream();
+
+    result.root = deserializeValueWithKnownTag(rootReader, result, "any", null);
     if (!result.root)
       throw new Error("Failed to retrieve root from module");
 

@@ -213,6 +213,7 @@
     if (sizeBytes >= 16 * 1024)
       console.log(description + ": " + (sizeBytes / 1024).toFixed(2) + "KB");
 
+    this.writeUtf8String(description);
     this.writeUint32(sizeBytes);
 
     this.writeBytes(otherWriter.bytes, 0, sizeBytes);
@@ -251,6 +252,7 @@
     this.typeTagWriter = null;
 
     this.anyTypeValuesWritten = 0;
+    this.typeTagsWritten = 0;
 
     this._getTableForTypeTag = this.getTableForTypeTag.bind(this);
   };
@@ -330,6 +332,8 @@
       writer = this.typeTagWriter;
 
     writer.writeVarUint32(tag);
+
+    this.typeTagsWritten += 1;
   };
 
 
@@ -349,7 +353,7 @@
 
   JsAstModule.prototype.serializeObject = function (writer, node, index, isInline) {
     if (Array.isArray(node))
-      throw new Error("Should have used serializeArray");
+      throw new Error("Should have serialized inline array");
 
     var shape = this.getShapeForObject(node);
     if (shape.tagIndex === null)
@@ -587,28 +591,6 @@
   }
 
 
-  JsAstModule.prototype.serializeArray = function (writer, node) {
-    if (!Array.isArray(node))
-      throw new Error("Should have used serializeObject");
-
-    writer.writeVarUint32(node.length);
-    if (node.length === 0)
-      return;
-
-    var tag = this.arrayTypeTags.get(node);
-    if (!tag)
-      throw new Error("No precomputed type tag for array");
-
-    var tagIndex = this.getIndexForTypeTag(tag);
-    this.writeTypeTag(writer, tagIndex);
-
-    // FIXME: Use relative indexes here?
-    for (var i = 0, l = node.length; i < l; i++) {
-      this.serializeValueWithKnownTag(writer, node[i], tag, null);
-    }
-  };
-
-
   JsAstModule.prototype.serializeTable = function (writer, table, ordered, serializeEntry) {
     var finalized = table.finalize(0);
 
@@ -818,6 +800,12 @@
 
     var objectWriter = new ValueWriter(1024 * 1024 * 8, writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
+
+
+    var rootWriter = new ValueWriter(128 * 1024);
+    module.serializeValueWithKnownTag(rootWriter, module.root, "any", null);
+
+
     writer.writeSubstream(tagWriter, "tags");
     writer.writeSubstream(stringWriter, "strings");
 
@@ -838,11 +826,13 @@
 
 
     writer.writeSubstream(objectWriter, "objects");
-
-    module.serializeValueWithKnownTag(writer, module.root, "any", null);
+    writer.writeSubstream(rootWriter, "root");
 
     if (omitCount > 0)
       console.log("objects written inline:", omitCount);
+
+    if (common.TypeTagStream)
+      console.log("type tags written:", module.typeTagsWritten);
 
     console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);

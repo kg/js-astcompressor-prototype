@@ -613,7 +613,7 @@
   exports.DeduplicationUsageThreshold = 1;
 
   // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints               = true;
+  exports.EnableVarints               = false;
 
   // Sorts the object table to reduce the average size of varints,
   //  and potentially improve stream compression in general.
@@ -645,7 +645,7 @@
   exports.RelativeIndexes             = false;
 
   // Separate sequential stream for all type tags
-  exports.TypeTagStream               = false;
+  exports.TypeTagStream               = true;
 
   // Separate sequential streams of values, partitioned by type.
   exports.ValueStreamPerType          = true;
