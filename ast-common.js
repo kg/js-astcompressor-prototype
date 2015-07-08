@@ -9,7 +9,7 @@
     factory((root.astCommon = {}));
   }
 }(this, function (exports) {
-  var LogTables = false;
+  var LogTables = true;
 
 
   function NamedTableId (entry) {
@@ -22,26 +22,6 @@
 
   NamedTableId.prototype.equals = function (rhs) {
     return this.entry === rhs.entry;
-  };
-
-  NamedTableId.prototype.redirect = function (newEntry) {
-    if (!newEntry)
-      throw new Error("Id must have an entry");
-
-    if (newEntry === this.entry)
-      throw new Error("Already pointing at this entry");
-
-    if (newEntry.isInvalidated)
-      throw new Error("Cannot redirect to an invalidated entry");
-
-    // Maintain a list on the target entry that
-    //  contains all redirected ids that point at it.
-    if (!newEntry.dedupedIds)
-      newEntry.dedupedIds = [];    
-
-    this.entry = newEntry;
-    this.isRedirected = true;
-    newEntry.dedupedIds.push(this);
   };
 
   NamedTableId.prototype.checkInvariants = function () {
@@ -88,6 +68,24 @@
     return this.entry.index;
   };
 
+  NamedTableId.prototype.get_hit_count = function () {
+    this.checkInvariants();
+
+    return this.entry.hitCount;
+  };
+
+  NamedTableId.prototype.set_hit_count = function (value) {
+    this.checkInvariants();
+
+    this.entry.hitCount = value | 0;
+  };
+
+  NamedTableId.prototype.is_omitted = function () {
+    this.checkInvariants();
+
+    return this.entry.isOmitted;
+  };
+
   NamedTableId.prototype.get_global_index = function () {
     this.checkInvariants();
 
@@ -119,8 +117,7 @@
     this.index = undefined;
     this.order = undefined;
     this.hitCount = 1;
-    this.isInvalidated = false;
-    this.dedupedIds = null;
+    this.isOmitted = false;
 
     this.id = new NamedTableId(this);
   };
@@ -210,7 +207,7 @@
       var entry = this.entries[k];
 
       // Skip over dedupe sources
-      if (entry.name != k)
+      if (entry.isOmitted)
         continue;
 
       callback(entry.id);
@@ -218,53 +215,24 @@
   };
 
   // Makes source's table entry a copy of target's.
-  NamedTable.prototype.dedupe = function (source, target) {
-    var sourceEntry, targetEntry;
+  NamedTable.prototype.omit = function (value) {
+    var entry;
 
     if (
-      source instanceof NamedTableId
+      value instanceof NamedTableId
     )
-      sourceEntry = source.entry;
+      entry = value.entry;
     else
-      sourceEntry = this.entries[source];
+      entry = this.entries[value];
 
-    if (
-      target instanceof NamedTableId
-    )
-      targetEntry = target.entry;
-    else
-      targetEntry = this.entries[target];
+    if (!entry)
+      throw new Error("value must be in the table");
 
-    if (!sourceEntry)
-      throw new Error("source must exist");
-    else if (!targetEntry)
-      throw new Error("target must exist");
+    if (value.isOmitted)
+      return;
 
-    if (sourceEntry.table !== this)
-      throw new Error("source is from the wrong table");
-    else if (targetEntry.table !== this)
-      throw new Error("target is from the wrong table");
-
-    // Invalidate the entry.
-    sourceEntry.isInvalidated = true;
-    // Deduped entries aren't counted or iterated by forEach
+    value.isOmitted = true;
     this.count -= 1;
-
-    // If this entry has redirected ids pointing at it,
-    //  point them at the target entry.
-    if (sourceEntry.dedupedIds && sourceEntry.dedupedIds.length) {
-      for (var i = 0, l = sourceEntry.dedupedIds.length; i < l; i++) {
-        var id = sourceEntry.dedupedIds[i];
-        id.redirect(targetEntry);
-      }
-
-      sourceEntry.dedupedIds = null;
-    }
-
-    sourceEntry.id.redirect(targetEntry);
-
-    this.entries[sourceEntry.name] = targetEntry;
-    targetEntry.hitCount += 1;
   };
 
   NamedTable.prototype.finalize = function (baseIndex) {
@@ -277,8 +245,10 @@
       result[i++] = id;
     });
 
-    if (i !== this.count)
+    if (result.length !== this.count) {
+      console.log(result.length, this.count);
       throw new Error("Count mismatch");
+    }
 
     if (exports.SortTables) {
       // First pass: sort by usage count so most frequently
@@ -667,7 +637,7 @@
 
   // If set to an integer, objects with this # of uses or
   //  less are encoded inline.
-  exports.InlineUseCountThreshold     = null;
+  exports.InlineUseCountThreshold     = 1;
 
   exports.ConditionalInlining         = !!exports.InlineUseCountThreshold;
 

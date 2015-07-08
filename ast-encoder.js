@@ -670,6 +670,14 @@
   };
 
   JsAstModuleBuilder.prototype.finish = function (root) {
+    if (this.getHitCount) {
+      var self = this;
+      this.result.objects.forEach(function (id) {
+        var hitCount = self.getHitCount(id.get_value());
+        id.set_hit_count(hitCount);
+      });    
+    }
+
     var rootTag = this.result.getTypeTagForValue(root);
     var rootTable = this.result.getTableForTypeTag(rootTag);
     rootTable.add(root);
@@ -685,6 +693,18 @@
     var writer = new ValueWriter();
 
     writer.writeBytes(common.Magic);
+
+    if (common.ConditionalInlining) {
+      var maybeOmitCallback = function (id) {
+        var hitCount = id.get_hit_count();
+
+        if (hitCount <= common.InlineUseCountThreshold) {
+          module.objects.omit(id);
+        }
+      };
+
+      module.objects.forEach(maybeOmitCallback);
+    }
 
     module.finalize();
 

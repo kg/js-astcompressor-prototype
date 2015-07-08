@@ -9,16 +9,10 @@
     factory((root.deduplicatingTreeBuilder = {}));
   }
 }(this, function (exports) {
-  function InternTableEntry (hash, node) {
-    this.hash = hash;
-    this.node = node;
-    this.useCount = 1;
-  };
-
-
   function MakeBuilder (baseClass, getObjectId, deduplicationUsageThreshold) {
     var ctor = function (/* ... */) {
       this.internTable = Object.create(null);
+      this.hitCounts   = new WeakMap();
       this.nodesFinalized = 0;
       this.nodesPruned    = 0;
 
@@ -67,11 +61,16 @@
       return head;
     };
 
+    ctor.prototype.getHitCount = function (obj) {
+      var result = this.hitCounts.get(obj) || 0;
+      return result | 0;
+    };
+
     ctor.prototype.finalize = function (obj) {
       var table = this.$getTable(obj.type);
       this.nodesFinalized += 1;      
 
-      // TODO: Generate some sort of cheap integer hash instead
+      // TODO: Generate some sort of cheap in teger hash instead
       // TODO: Use shape table instead of walking properties
       var bruteForceHash = "";
       for (var k in obj) {
@@ -82,16 +81,18 @@
 
       var interned = table[bruteForceHash];
       if (interned) {
-        var shouldDeduplicate = interned.useCount >= deduplicationUsageThreshold
-        interned.useCount += 1;
+        var useCount = this.hitCounts.get(interned);
+        this.hitCounts.set(interned, useCount + 1);
 
+        var shouldDeduplicate = useCount >= deduplicationUsageThreshold
         if (shouldDeduplicate) {
           this.nodesPruned += 1;
-          return interned.node;
+          return interned;
         }
-      } else {
-        table[bruteForceHash] = new InternTableEntry(bruteForceHash, obj);
       }
+
+      table[bruteForceHash] = obj;
+      this.hitCounts.set(obj, 1);
 
       return baseClass.prototype.finalize.call(this, obj);
     };
