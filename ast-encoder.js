@@ -501,6 +501,9 @@
         var name = id.get_name();
         var shape = this.getShapeForObject(value);
         if (shape) {
+          // HACK
+          writer.writeByte(common.InliningMarker);
+
           if (isUntypedObject) {
             var inlineTag = this.getTypeTagForValue(value);
             var inlineTagIndex = this.getIndexForTypeTag(tag);
@@ -780,7 +783,7 @@
 
     if (omitCount > 0)
       console.log("objects written inline:", omitCount);
-    
+
     console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);
 

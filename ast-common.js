@@ -588,6 +588,7 @@
   exports.writeLEBInt32 = writeLEBInt32;
   exports.readLEBInt32  = readLEBInt32;
 
+  exports.InliningMarker = 255;
 
   exports.Magic = new Uint8Array([
     0x89,

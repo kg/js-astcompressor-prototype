@@ -18,6 +18,7 @@
 
 
   var IoTrace = false;
+  var TraceInlining = false;
 
 
   function ValueReader (bytes, index, count) {
@@ -28,6 +29,10 @@
     this.scratchI32   = new Int32Array  (this.scratchBytes.buffer);
     this.scratchF64   = new Float64Array(this.scratchBytes.buffer);
   }
+
+  ValueReader.prototype.peekByte = function (offset) {
+    return this.byteReader.peek(offset);
+  };
 
   ValueReader.prototype.readByte = function () {
     return this.byteReader.read();
@@ -242,6 +247,45 @@
   };
 
 
+  function readObject (reader, module, tag, baseIndex) {
+    var isUntypedObject = (tag === "object");
+    if (!isUntypedObject) {
+      var shape = module.shapes.get(tag);
+      if (!shape)
+        throw new Error("Unhandled value type " + tag + " with no shape");
+    }
+
+    var objectTable;
+    if (IoTrace)
+      console.log("read  object");
+
+    objectTable = module.objects;
+
+    if (common.ConditionalInlining) {
+      var leadingByte = reader.peekByte(0);
+
+      if (leadingByte === common.InliningMarker) {
+        reader.readByte();
+
+        if (isUntypedObject) {
+          tag = readTypeTag(reader, module);
+          if (TraceInlining)
+            console.log("reading untyped " + tag + " inline");
+        } else {
+          if (TraceInlining)
+            console.log("reading " + tag + " inline");
+        }
+
+        var result = new Object();
+        deserializeObjectContents(reader, module, result, null);
+        return result;
+      }
+    }
+
+    var index = readMaybeRelativeIndex(reader, baseIndex);
+    return getTableEntry(objectTable, index);
+  };
+
   function deserializeValueWithKnownTag (reader, module, tag, baseIndex) {
     switch (tag) {
       case "any": {
@@ -275,16 +319,6 @@
 
         return array;
 
-      case "object":
-        var objectTable;
-        if (IoTrace)
-          console.log("read  object");
-
-        objectTable = module.objects;
-
-        var index = readMaybeRelativeIndex(reader, baseIndex);
-        return getTableEntry(objectTable, index);
-
       case "boolean":
         return Boolean(reader.readByte());
 
@@ -295,16 +329,8 @@
         return reader.readFloat64();
 
       default:
-        var shape = module.shapes.get(tag);
-        if (!shape)
-          throw new Error("Unhandled value type " + tag + " with no shape");
-
-        var index = readMaybeRelativeIndex(reader, baseIndex);
-
-        var objectTable;
-        objectTable = module.objects;
-
-        return getTableEntry(objectTable, index);
+      case "object":
+        return readObject(reader, module, tag, baseIndex);
     }
 
     throw new Error("unexpected");
