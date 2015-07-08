@@ -21,6 +21,7 @@
       NextObjectId = common.NextObjectId;
 
   var IoTrace = false;
+  var TraceInlining = false;
 
   function ValueWriter (capacity, parent) {
     if (typeof (capacity) !== "number")
@@ -493,7 +494,31 @@
     }
 
     try {
-      var index = table.get_index(value);
+      var id = table.get_id(value);
+      var index = id.get_index();
+
+      if (id.is_omitted()) {
+        var name = id.get_name();
+        var shape = this.getShapeForObject(value);
+        if (shape) {
+          if (isUntypedObject) {
+            var inlineTag = this.getTypeTagForValue(value);
+            var inlineTagIndex = this.getIndexForTypeTag(tag);
+            writer.writeVarUint32(inlineTagIndex);
+            if (TraceInlining)
+              console.log("Inlined untyped", shape.name, name);
+          } else {
+            if (TraceInlining)
+              console.log("Inlined", shape.name, name);
+          }
+
+          this.serializeObject(writer, value, index || null);
+
+          return;
+        } else {
+          throw new Error("Object without shape was omitted");
+        }
+      }
 
       // There's only one global object table, so we can encode everything
       //  as a single index.
@@ -501,6 +526,7 @@
         common.RelativeIndexes && 
         (typeof (baseIndex) === "number")
       ) {
+        // FIXME: Sometimes baseIndex will be undefined/null if the parent was inlined
         writer.writeRelativeIndex(index, baseIndex)
       } else {
         writer.writeIndex(index);
@@ -694,12 +720,14 @@
 
     writer.writeBytes(common.Magic);
 
+    var omitCount = 0;
     if (common.ConditionalInlining) {
       var maybeOmitCallback = function (id) {
         var hitCount = id.get_hit_count();
 
         if (hitCount <= common.InlineUseCountThreshold) {
           module.objects.omit(id);
+          omitCount += 1;
         }
       };
 
@@ -750,6 +778,9 @@
 
     module.serializeValueWithKnownTag(writer, module.root, "any", null);
 
+    if (omitCount > 0)
+      console.log("objects written inline:", omitCount);
+    
     console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);
 

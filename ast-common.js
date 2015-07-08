@@ -9,7 +9,7 @@
     factory((root.astCommon = {}));
   }
 }(this, function (exports) {
-  var LogTables = true;
+  var LogTables = false;
 
 
   function NamedTableId (entry) {
@@ -228,10 +228,10 @@
     if (!entry)
       throw new Error("value must be in the table");
 
-    if (value.isOmitted)
+    if (entry.isOmitted)
       return;
 
-    value.isOmitted = true;
+    entry.isOmitted = true;
     this.count -= 1;
   };
 
