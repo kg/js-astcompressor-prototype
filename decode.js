@@ -10,7 +10,7 @@ var astDecoder = require('./ast-decoder.js');
 var fs = require('fs');
 
 if (process.argv.length < 4) {
-  console.log("USAGE: decode input.webasm [astOutput.json] [configuration.json]");
+  console.log("USAGE: decode input.bast [astOutput.json] [configuration.json]");
   process.exit(1);
 }
 

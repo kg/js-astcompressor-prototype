@@ -12,7 +12,7 @@ var treeBuilder = require("./parse/treebuilder.js");
 var fs = require('fs');
 
 if (process.argv.length < 4) {
-  console.log("USAGE: encode input.js output.webasm [astOutput.json] [configuration.json]");
+  console.log("USAGE: encode input.js output.bast [astOutput.json] [configuration.json]");
   process.exit(1);
 }
 

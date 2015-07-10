@@ -16,6 +16,7 @@ function percentage {
 rm -f $FILE.brotli $FILE.lzham $FILE.gz
 
 SIZE_RAW=$(sizeof $FILE)
+echo $FILE $(kb $SIZE_RAW)KiB
 
 #tooooooo slow
 #pigz -11 -f -k $FILE
@@ -31,8 +32,6 @@ SIZE_GZIP=$(sizeof $FILE.gz)
 SIZE_BROTLI=$(sizeof $FILE.brotli)
 SIZE_LZHAM=$(sizeof $FILE.lzham)
 
-echo $FILE $(kb $SIZE_RAW)KiB
-echo " gzip  " $(percentage $SIZE_GZIP   $SIZE_RAW)%
-# echo " zopfli" $(percentage $SIZE_ZOPFLI $SIZE_RAW)%
-echo " lzham " $(percentage $SIZE_LZHAM  $SIZE_RAW)%
-echo " brotli" $(percentage $SIZE_BROTLI $SIZE_RAW)%
+echo " gzip  " $(kb $SIZE_GZIP)KiB $(percentage $SIZE_GZIP   $SIZE_RAW)%
+echo " lzham " $(kb $SIZE_LZHAM)KiB $(percentage $SIZE_LZHAM  $SIZE_RAW)%
+echo " brotli" $(kb $SIZE_BROTLI)KiB $(percentage $SIZE_BROTLI $SIZE_RAW)%

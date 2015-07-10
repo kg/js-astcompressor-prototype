@@ -10,21 +10,27 @@ INFILE=$1/$2 ;
 fi
 
 if [ -z $3 ]; then
-CONFIGURATION=
+CONFIGURATION_NAME=default
 else
-CONFIGURATION=$3
+CONFIGURATION_NAME=$3
 fi;
 
-rm -f Test/$FILE_PREFIX.ast.json Test/$FILE_PREFIX.ast.decoded.json
+CONFIGURATION=configurations/$CONFIGURATION_NAME.json
+OUTDIR=Test/output/$CONFIGURATION_NAME
+OUTFILE=$OUTDIR/$FILE_PREFIX.binast
+
+mkdir -p $OUTDIR
+
+rm -f $OUTFILE.ast.json $OUTFILE.ast.json
 
 # echo // input
 echo // encoding
-node --expose-gc --nouse-idle-notification --max-old-space-size=8192 encode.js $INFILE Test/$FILE_PREFIX.webasm Test/$FILE_PREFIX.ast.json $CONFIGURATION
+node --expose-gc --nouse-idle-notification --max-old-space-size=8192 encode.js $INFILE $OUTFILE $OUTFILE.ast.json $CONFIGURATION
 echo // read ast json
-node --expose-gc -e "try { var json = require('fs').readFileSync('Test/$FILE_PREFIX.ast.json', { encoding: 'utf8' }); console.time('JSON.parse'); var tree = JSON.parse(json); console.timeEnd('JSON.parse'); json = null; global.gc(); console.log('heapUsed ' + process.memoryUsage().heapUsed); } catch (e) { console.log('failed: no ast'); }"
+node --expose-gc -e "try { var json = require('fs').readFileSync('$OUTFILE.ast.json', { encoding: 'utf8' }); console.time('JSON.parse'); var tree = JSON.parse(json); console.timeEnd('JSON.parse'); json = null; global.gc(); console.log('heapUsed ' + process.memoryUsage().heapUsed); } catch (e) { console.log('failed: no ast'); }"
 echo // decoding
-node --expose-gc --nouse-idle-notification --max-old-space-size=8192 decode.js Test/$FILE_PREFIX.webasm Test/$FILE_PREFIX.ast.decoded.json $CONFIGURATION
+node --expose-gc --nouse-idle-notification --max-old-space-size=8192 decode.js $OUTFILE $OUTFILE.ast.decoded.json $CONFIGURATION
 echo // size comparison
-./size-comparison.sh Test/$FILE_PREFIX.webasm
+./size-comparison.sh $OUTFILE
 echo // diff
-diff Test/$FILE_PREFIX.ast.json Test/$FILE_PREFIX.ast.decoded.json
+diff $OUTFILE.ast.json $OUTFILE.ast.decoded.json
