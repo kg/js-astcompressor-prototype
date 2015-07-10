@@ -24,10 +24,11 @@
   var TraceInlining = false;
   var TraceInlinedTypeCount = 0;
 
-  function ValueWriter (capacity, parent) {
-    if (typeof (capacity) !== "number")
-      // HACK: Default max size 128mb because growable buffers are effort
-      capacity = (1024 * 1024) * 128;
+  function ValueWriter (description, parent) {
+    // HACK: Default max size 128mb because growable buffers are effort
+    var capacity = (1024 * 1024) * 128;
+    if (parent)
+      capacity /= 4;
 
     this.bytes    = new Uint8Array(capacity);
     this.position = 0;
@@ -37,6 +38,8 @@
       this.varintSizes = parent.varintSizes;
     else
       this.varintSizes = [0, 0, 0, 0, 0, 0];
+
+    this.description = description;
   };
 
   ValueWriter.prototype.getPosition = function () {
@@ -53,7 +56,7 @@
       throw new Error("buffer full");
 
     if (IoTrace)
-      console.log("write byte", b.toString(16));
+      console.log(this.description + " write byte", b.toString(16));
 
     this.bytes[this.position++] = b;
   };
@@ -87,7 +90,7 @@
       throw new Error("Value is larger than 24 bits");
 
     if (IoTrace)
-      console.log("write uint24", masked.toString(16));
+      console.log(this.description + " write uint24", masked.toString(16));
 
     this.view.setUint32(this.position, masked, true);
     this.position += 3;
@@ -97,7 +100,7 @@
     this.view.setUint32(this.position, value, true);
 
     if (IoTrace)
-      console.log("write uint", value.toString(16), 
+      console.log(this.description + " write uint", value.toString(16), 
         "[" + this.bytes[this.position].toString(16) + " " + this.bytes[this.position + 1].toString(16) + " " + this.bytes[this.position + 2].toString(16) + "]"
       );
 
@@ -106,7 +109,7 @@
 
   ValueWriter.prototype.writeInt32 = function (value) {
     if (IoTrace)
-      console.log("write int", value.toString(16));
+      console.log(this.description + " write int", value.toString(16));
 
     this.view.setInt32(this.position, value, true);
     this.position += 4;
@@ -115,7 +118,7 @@
   ValueWriter.prototype.writeVarUint32 = function (value) {
     if (common.EnableVarints) {
       if (IoTrace)
-        console.log("write varuint", value.toString(16));
+        console.log(this.description + " write varuint", value.toString(16));
 
       var before = this.position;
       common.writeLEBUint32(this, value);
@@ -135,7 +138,7 @@
   ValueWriter.prototype.writeVarInt32 = function (value) {
     if (common.EnableVarints) {
       if (IoTrace)
-        console.log("write varint", value.toString(16));
+        console.log(this.description + " write varint", value.toString(16));
 
       var before = this.position;
       common.writeLEBInt32(this, value);
@@ -163,7 +166,7 @@
 
     if (IoTrace)
       console.log(
-        "write relindex " + 
+        this.description + " write relindex " + 
         (
           (value === 0xFFFFFFFF)
             ? "null"
@@ -184,7 +187,7 @@
 
   ValueWriter.prototype.writeFloat64 = function (value) {
     if (IoTrace)
-      console.log("write float64", value.toFixed(4));
+      console.log(this.description + " write float64", value.toFixed(4));
 
     this.view.setFloat64(this.position, value, true);
     this.position += 8;
@@ -212,11 +215,15 @@
       this.writeByte(0);
   };
 
-  ValueWriter.prototype.writeSubstream = function (otherWriter, description) {
+  ValueWriter.prototype.writeSubstream = function (otherWriter) {
     var sizeBytes = otherWriter.position;
+    var description = otherWriter.description;
 
     if (sizeBytes >= 16 * 1024)
       console.log(description + ": " + (sizeBytes / 1024).toFixed(2) + "KB");
+
+    var prior = IoTrace;
+    IoTrace = false;
 
     this.writeUtf8String(description);
     this.writeUint32(sizeBytes);
@@ -224,6 +231,8 @@
     this.writeBytes(otherWriter.bytes, 0, sizeBytes);
 
     this.writeUint32(sizeBytes);
+
+    IoTrace = prior;
   };
 
   ValueWriter.prototype.getResult = 
@@ -360,9 +369,8 @@
 
     this.tags.forEach(function (entry) {
       var tag = entry.get_name();
-      var size = 1024 * 1024 * 16;
 
-      self.valueStreams[tag] = new ValueWriter(size, writer);
+      self.valueStreams[tag] = new ValueWriter("values[" + tag + "]", writer);
     });
   };
 
@@ -425,9 +433,15 @@
       if (trace)
         console.log("Inlined", shape.name, shape.tagIndex.toString(16));
 
-      if (common.ValueStreamPerType && common.PartitionedInlining) {
+      if (
+        common.ValueStreamPerType && 
+        common.PartitionedInlining
+      ) {
         writer = this.valueStreams[shape.name];
         shouldOverride = true;
+
+        if (trace)
+          console.log("Inlining " + shape.name + " to " + writer.description);
       }
     }
 
@@ -532,7 +546,7 @@
 
       case "any": {
         if (IoTrace)
-          console.log("write any ->");
+          console.log(writer.description + " write any ->");
 
         // FIXME: gross.
         tag = this.getTypeTagForValue(value);
@@ -548,13 +562,19 @@
 
       case "array":
         writer.writeVarUint32(value.length);
-        if (value.length === 0)
+        if (value.length === 0) {
+          if (IoTrace)
+            console.log("  Wrote empty array to " + writer.description);
           return;
+        }
 
         // The tree-walker figured out whether we need to use 'any' earlier
         var elementTag = this.arrayTypeTags.get(value);
         var elementTagIndex = this.getIndexForTypeTag(elementTag);
         this.writeTypeTag(writer, elementTagIndex);
+
+        if (IoTrace)
+          console.log("  Writing array of type " + elementTag + " with " + value.length + " item(s) to " + writer.description);
 
         for (var i = 0; i < value.length; i++) {
           var element = value[i];
@@ -597,9 +617,9 @@
 
     if (IoTrace) {
       if (tag !== actualValueTag)
-        console.log("write " + tag + " -> " + actualValueTag);
+        console.log(writer.description + " write " + tag + " -> " + actualValueTag);
       else
-        console.log("write " + tag);
+        console.log(writer.description + " write " + tag);
     }
 
     try {
@@ -810,7 +830,7 @@
 
   // Converts a JsAstModule into bytes and writes them into byteWriter.
   function serializeModule (module, byteWriter, stats) {
-    var writer = new ValueWriter();
+    var writer = new ValueWriter("module");
 
     writer.writeBytes(common.Magic);
 
@@ -849,54 +869,54 @@
     writer.writeUint32(stringCount);
     writer.writeUint32(objectCount);
 
-    var tagWriter = new ValueWriter(1024 * 1024 * 1, writer);
+    var tagWriter = new ValueWriter("tag table", writer);
     module.serializeTable(tagWriter, module.tags, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
-    var stringWriter = new ValueWriter(1024 * 1024 * 4, writer);
+    var stringWriter = new ValueWriter("string table", writer);
     module.serializeTable(stringWriter, module.strings, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
     if (common.ConditionalInlining)
-      module.inliningWriter = new ValueWriter(1024 * 1024 * 4, writer);
+      module.inliningWriter = new ValueWriter("inlining flags", writer);
 
     if (common.TypeTagStream)
-      module.typeTagWriter = new ValueWriter(1024 * 1024 * 4, writer);
+      module.typeTagWriter = new ValueWriter("type tags", writer);
 
     if (common.ValueStreamPerType)
       module.createValueStreams(writer);
 
-    var objectWriter = new ValueWriter(1024 * 1024 * 8, writer);
+    var objectWriter = new ValueWriter("object table", writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
 
 
-    var rootWriter = new ValueWriter(128 * 1024);
+    var rootWriter = new ValueWriter("root node");
     module.serializeValueWithKnownTag(rootWriter, module.root, "any", null);
 
 
-    writer.writeSubstream(tagWriter, "tags");
-    writer.writeSubstream(stringWriter, "strings");
+    writer.writeSubstream(tagWriter);
+    writer.writeSubstream(stringWriter);
 
 
     if (common.ConditionalInlining)
-      writer.writeSubstream(module.inliningWriter, "inlining flags");
+      writer.writeSubstream(module.inliningWriter);
 
     if (common.TypeTagStream)
-      writer.writeSubstream(module.typeTagWriter, "type tags");
+      writer.writeSubstream(module.typeTagWriter);
 
 
     if (common.ValueStreamPerType)
     for (var key in module.valueStreams) {
       var valueStream = module.valueStreams[key];
       writer.writeIndex(module.tags.get_index(key));      
-      writer.writeSubstream(valueStream, "values[" + key + "]");
+      writer.writeSubstream(valueStream);
     }
 
 
-    writer.writeSubstream(objectWriter, "objects");
-    writer.writeSubstream(rootWriter, "root");
+    writer.writeSubstream(objectWriter);
+    writer.writeSubstream(rootWriter);
 
     if (omitCount > 0)
       console.log("objects written inline:", omitCount, "(" + (omitCount * 100 / totalCount).toFixed(1) + "%)");

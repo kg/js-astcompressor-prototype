@@ -22,13 +22,14 @@
   var TraceInlinedTypeCount = 0;
 
 
-  function ValueReader (bytes, index, count) {
+  function ValueReader (bytes, index, count, description) {
     this.bytes        = bytes;
     this.byteReader   = encoding.makeByteReader(bytes, index, count);
     this.scratchBytes = new Uint8Array  (128);
     this.scratchU32   = new Uint32Array (this.scratchBytes.buffer);
     this.scratchI32   = new Int32Array  (this.scratchBytes.buffer);
     this.scratchF64   = new Float64Array(this.scratchBytes.buffer);
+    this.description  = description || null;
   }
 
   ValueReader.prototype.peekByte = function (offset) {
@@ -39,7 +40,7 @@
     var result = this.byteReader.read();
 
     if (IoTrace)
-      console.log("read  byte", result.toString(16));
+      console.log(this.description + " read  byte", result.toString(16));
 
     return result;
   };
@@ -79,7 +80,7 @@
 
     var result = this.scratchU32[0];
     if (IoTrace)
-      console.log("read  uint", result.toString(16), "[" + b1.toString(16) + " " + b2.toString(16) + " " + b3.toString(16) + "]");
+      console.log(this.description + " read  uint", result.toString(16), "[" + b1.toString(16) + " " + b2.toString(16) + " " + b3.toString(16) + "]");
     return result;
   };
 
@@ -91,7 +92,7 @@
 
     var result = this.scratchU32[0];
     if (IoTrace)
-      console.log("read  uint24", result.toString(16));
+      console.log(this.description + " read  uint24", result.toString(16));
     return result;
   };
 
@@ -101,7 +102,7 @@
 
     var result = this.scratchI32[0];
     if (IoTrace)
-      console.log("read  int", result.toString(16));
+      console.log(this.description + " read  int", result.toString(16));
     return result;
   };
 
@@ -119,7 +120,7 @@
 
     var result = common.readLEBUint32(this.byteReader);
     if (IoTrace)
-      console.log("read  varuint", result.toString(16), "[" + b1.toString(16) + " " + b2.toString(16) + " " + b3.toString(16) + "]");
+      console.log(this.description + " read  varuint", result.toString(16), "[" + b1.toString(16) + " " + b2.toString(16) + " " + b3.toString(16) + "]");
     return result;
   };
 
@@ -129,7 +130,7 @@
 
     var result = common.readLEBInt32(this.byteReader);
     if (IoTrace)
-      console.log("read  varint", result.toString(16));
+      console.log(this.description + " read  varint", result.toString(16));
     return result;
   };
 
@@ -146,7 +147,7 @@
     }
 
     if (IoTrace)
-      console.log("read relindex " + indexRaw + " + " + baseIndex + " -> " + result);
+      console.log(this.description + " read relindex " + indexRaw + " + " + baseIndex + " -> " + result);
 
     return result;
   };
@@ -166,7 +167,7 @@
 
     var result = this.scratchF64[0];
     if (IoTrace)
-      console.log("read  float64", result.toFixed(4));
+      console.log(this.description + " read  float64", result.toFixed(4));
     return result;
   };
 
@@ -200,10 +201,13 @@
   };
 
   ValueReader.prototype.readSubstream = function () {
+    var prior = IoTrace;
+    IoTrace = false;
+
     var description = this.readUtf8String();
     var length = this.readUint32();
 
-    var result = new ValueReader(this.bytes, this.byteReader.getPosition(), length);
+    var result = new ValueReader(this.bytes, this.byteReader.getPosition(), length, description);
 
     this.byteReader.skip(length);
 
@@ -211,6 +215,7 @@
     if (length2 !== length)
       throw new Error("Length footer didn't match length header");
 
+    IoTrace = prior;
     return result;
   };
 
@@ -291,7 +296,7 @@
 
     var objectTable;
     if (IoTrace)
-      console.log("read  object");
+      console.log(reader.description + " read  object");
 
     objectTable = module.objects;
 
@@ -308,9 +313,6 @@
       if (inlinedFlag === 2) {
         return null;
       } else if (inlinedFlag === 1) {
-        if (common.ValueStreamPerType && common.PartitionedInlining)
-          reader = module.valueStreams[tag];
-
         var result = new Object();
         deserializeObjectContents(reader, module, result, null, true);
         return result;
@@ -330,14 +332,14 @@
           throw new Error("Found 'any' type tag when reading any-tag");
 
         if (IoTrace)
-          console.log("read  any ->");
+          console.log(reader.description + " read  any ->");
         return deserializeValueWithKnownTag(reader, module, tag, baseIndex);
       }
 
       case "string":
         var index = readMaybeRelativeIndex(reader, baseIndex);
         if (IoTrace)
-          console.log("read  string");
+          console.log(reader.description + " read  string");
         return getTableEntry(module.strings, index);
 
       case "array":
@@ -346,11 +348,16 @@
 
         if (length > 0) {
           var elementTag = readTypeTag(reader, module);
+          if (IoTrace || true)
+            console.log(reader.description + " read  array of type " + elementTag + " with " + length + " element(s)");
 
           for (var i = 0; i < length; i++) {
             var element = deserializeValueWithKnownTag(reader, module, elementTag, baseIndex);
             array[i] = element;
           }
+        } else {
+          if (IoTrace || true)
+            console.log(reader.description + " read  empty array");
         }
 
         return array;
@@ -374,9 +381,13 @@
 
 
   function getReaderForField (defaultReader, module, field, tag) {
-    if (common.ValueStreamPerType && common.PartitionedInlining) {
+    if (
+      common.ValueStreamPerType && 
+      common.PartitionedInlining
+    ) {
       var shape = module.shapes.get(tag);
-      if (shape || (tag === "object"))
+
+      if (shape || (tag === "object") || (tag === "array"))
         return defaultReader;
     } 
 
@@ -392,16 +403,39 @@
   };
 
 
+  function deserializeFieldValue (reader, module, shape, field, baseIndex, overrideReader) {
+      var tag = common.pickTagForField(field, function (t) {
+        var shape = module.shapes.get(t);
+        return shape;
+      });
+
+      if (!overrideReader)
+        reader = getReaderForField(reader, module, field, tag);
+
+      var value = deserializeValueWithKnownTag(reader, module, tag, baseIndex);
+      return value;
+  }
+
+
   function deserializeObjectContents (reader, module, obj, index, isInline) {
     var shapeName = readTypeTag(reader, module);
 
     if (IoTrace)
       console.log("// object body #" + index);
 
+    var shouldOverride = false;
     if (isInline) {
       var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
-      if (trace)
-        console.log("reading inlined " + shapeName);
+
+      if (common.ValueStreamPerType && common.PartitionedInlining) {
+        reader = module.valueStreams[shapeName];
+        shouldOverride = true;
+        if (trace)
+          console.log("Reading inlined " + shapeName + " from " + reader.description);
+      } else {
+        if (trace)
+          console.log("reading inlined " + shapeName);
+      }
     }
 
     var shape = module.shapes.get(shapeName);
@@ -412,20 +446,12 @@
 
     for (var i = 0, l = shape.fields.length; i < l; i++) {
       var fd = shape.fields[i];
-      var value, index;
 
-      var tag = common.pickTagForField(fd, function (t) {
-        var shape = module.shapes.get(t);
-        return shape;
-      });
+      var value = deserializeFieldValue(reader, module, shape, fd, index, shouldOverride);
 
-      var fieldReader = getReaderForField(reader, module, fd, tag);
-      value = deserializeValueWithKnownTag(fieldReader, module, tag, index);
-
+      obj[fd.name] = value;
       if (IoTrace)
         console.log("// " + fd.name + " =", value);
-      
-      obj[fd.name] = value;
     }
 
     if (IoTrace)
@@ -484,7 +510,7 @@
 
 
   function bytesToModule (bytes, shapes) {
-    var reader = new ValueReader(bytes, 0, bytes.length);
+    var reader = new ValueReader(bytes, 0, bytes.length, "module");
 
     var magic = reader.readBytes(common.Magic.length);
     if (JSON.stringify(magic) !== JSON.stringify(common.Magic)) {
