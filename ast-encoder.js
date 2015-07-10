@@ -224,7 +224,7 @@
     var sizeBytes = otherWriter.position;
     var description = otherWriter.description;
 
-    if (sizeBytes >= 16 * 1024)
+    if (common.LogStreamSizes && (sizeBytes >= 8 * 1024))
       console.log(description + ": " + (sizeBytes / 1024).toFixed(2) + "KB");
 
     var prior = IoTrace;
@@ -730,7 +730,7 @@
     this.result = new JsAstModule(configuration, shapes);
 
     this.walkedCount = 0;
-    this.progressInterval = 100000;
+    this.progressInterval = 20000;
   };
 
   JsAstModuleBuilder.prototype = Object.create(AsmlikeJsonTreeBuilder.prototype);  
@@ -811,7 +811,8 @@
 
     this.walkedCount++;
     if ((this.walkedCount % this.progressInterval) === 0) {
-      console.log("Scanned " + this.walkedCount + " nodes");
+      if (typeof (process) === "object")
+        process.stdout.write(".");
     }
 
     if (Array.isArray(node)) {

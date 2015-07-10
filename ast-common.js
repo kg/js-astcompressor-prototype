@@ -620,6 +620,9 @@
   // Disable this for ASTs too large for JSON.stringify
   exports.DumpJson                    = true;
 
+  // At the end of encoding, log the size of any large streams
+  exports.LogStreamSizes              = false;
+
 
   exports.ShapeDefinition = ShapeDefinition;
 
