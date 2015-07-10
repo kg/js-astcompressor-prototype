@@ -404,8 +404,20 @@
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
     try {
-      if (!overrideWriter)
+      if (!overrideWriter) {
+        var oldWriter = writer;
         writer = this.getValueWriterForField(writer, field, tag);
+
+        if (IoTrace) {
+          if (writer === oldWriter)
+            console.log("field " + field.name + " did not pick writer -> " + writer.description);
+          else
+            console.log("field " + field.name + " picked writer " + oldWriter.description + " -> " + writer.description);
+        }
+      } else if (IoTrace) {
+        console.log("field " + field.name + " writer forced + " + writer.description);
+      }
+
       this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
     } catch (exc) {
       console.log("Failed while writing field " + field.name + " of type " + shape.name);

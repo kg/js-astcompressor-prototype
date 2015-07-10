@@ -348,7 +348,7 @@
 
         if (length > 0) {
           var elementTag = readTypeTag(reader, module);
-          if (IoTrace || true)
+          if (IoTrace)
             console.log(reader.description + " read  array of type " + elementTag + " with " + length + " element(s)");
 
           for (var i = 0; i < length; i++) {
@@ -356,7 +356,7 @@
             array[i] = element;
           }
         } else {
-          if (IoTrace || true)
+          if (IoTrace)
             console.log(reader.description + " read  empty array");
         }
 
@@ -381,16 +381,6 @@
 
 
   function getReaderForField (defaultReader, module, field, tag) {
-    if (
-      common.ValueStreamPerType && 
-      common.PartitionedInlining
-    ) {
-      var shape = module.shapes.get(tag);
-
-      if (shape || (tag === "object") || (tag === "array"))
-        return defaultReader;
-    } 
-
     if (common.ValueStreamPerType) {
       var reader = module.valueStreams[tag];
       if (!reader)
@@ -409,8 +399,19 @@
         return shape;
       });
 
-      if (!overrideReader)
+      if (!overrideReader) {
+        var oldReader = reader;
         reader = getReaderForField(reader, module, field, tag);
+
+        if (IoTrace) {
+          if (reader === oldReader)
+            console.log("field " + field.name + " did not pick reader -> " + reader.description);
+          else
+            console.log("field " + field.name + " picked reader " + oldReader.description + " -> " + reader.description);
+        }
+      } else if (IoTrace) {
+        console.log("field " + field.name + " reader forced " + reader.description);
+      }
 
       var value = deserializeValueWithKnownTag(reader, module, tag, baseIndex);
       return value;
