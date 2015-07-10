@@ -9,9 +9,6 @@
     factory((root.astCommon = {}));
   }
 }(this, function (exports) {
-  var LogTables = false;
-
-
   function NamedTableId (entry) {
     if (!entry)
       throw new Error("Id must have an entry");
@@ -323,7 +320,7 @@
     for (i = 0; i < result.length; i++) {
       result[i].entry.index = baseIndex + i;
 
-      if (LogTables)
+      if (exports.LogTables)
         console.log(this.semantic, result[i].get_name(), result[i].entry.hitCount, result[i].entry.index);
     }
 
@@ -612,65 +609,8 @@
     "boolean": true
   };
 
-  // Prune duplicate objects before serializing a module.
-  exports.DeduplicateObjects          = true;
-
-  // At least this many identical nodes must exist for a node
-  //  to be deduplicated.
-  exports.DeduplicationUsageThreshold = 1;
-
-  // Write indices as LEB128 32-bit uints instead of 4-byte uints
-  exports.EnableVarints               = true;
-
-  // Sorts the object table to reduce the average size of varints,
-  //  and potentially improve stream compression in general.
-  exports.SortTables                  = true;
-  // Two-pass object table sort. Highest frequency use objects
-  //  at the front of the table, then lower frequency use objects
-  //  sorted sequentially to improve locality (and compression?)
-  exports.LocalityAwareSorting        = true;
-  // Tables over this size use the larger locality cutoff.
-  // Roughly, we want to use this as a heuristic for cases
-  //  where indexes would otherwise frequently be 3 bytes
-  //  and hitcount sorting can reduce them to 2.
-  exports.LargeTableThreshold         = 1 << 13;
-  // How many items at the front of the table (hitcount sorted)
-  // Small is used for 'small' tables (see above), large etc
-  exports.LocalityCutoffSmall         = 128;
-  exports.LocalityCutoffLarge         = 1 << 13;
-  // How low can the minimum hitcount be
-  exports.LocalityMinimumThreshold    = 3;
-
-  // If set to an integer, objects with this # of uses or
-  //  less are encoded inline.
-  exports.InlineUseCountThreshold     = 10;
-
-  // If an object's estimated size is <= this, always inline it
-  exports.InlineObjectSizeThreshold   = null; // 7;
-
-  // See above
-  exports.ConditionalInlining         = exports.InlineUseCountThreshold !== null;
-
-  // If conditional inlining is active, writes inlined nodes
-  //  into their value streams instead of into the current stream
-  // FIXME: Totally busted
-  exports.PartitionedInlining         = true;
-
-  // Encode indexes as signed values relative to the index of
-  //  the current object.
-  exports.RelativeIndexes             = false;
-
-  // Separate sequential stream for all type tags
-  exports.TypeTagStream               = true;
-
-  // Separate sequential streams of values, partitioned by type.
-  exports.ValueStreamPerType          = true;
-
-  // If varints are disabled, writes indices as 3-byte uints
-  exports.ThreeByteIndices            = false;
-
-  // Null-terminated strings instead of length headers
-  exports.NullTerminatedStrings       = false;
+  // Dumps information on the sorted tables & hit counts
+  exports.LogTables                   = false;
 
   // Expected and decoded json ASTs are pretty printed.
   // Can't be on by default because JSON.stringify in node is

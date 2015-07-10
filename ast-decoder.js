@@ -9,7 +9,8 @@
     factory((root.astDecoder = {}));
   }
 }(this, function (exports) {
-  var common = require("./ast-common.js");
+  var common        = require("./ast-common.js");
+  var Configuration = require("./configuration.js");
 
   var NamedTable  = common.NamedTable,
       UniqueTable = common.UniqueTable,
@@ -22,14 +23,18 @@
   var TraceInlinedTypeCount = 0;
 
 
-  function ValueReader (bytes, index, count, description) {
-    this.bytes        = bytes;
-    this.byteReader   = encoding.makeByteReader(bytes, index, count);
-    this.scratchBytes = new Uint8Array  (128);
-    this.scratchU32   = new Uint32Array (this.scratchBytes.buffer);
-    this.scratchI32   = new Int32Array  (this.scratchBytes.buffer);
-    this.scratchF64   = new Float64Array(this.scratchBytes.buffer);
-    this.description  = description || null;
+  function ValueReader (bytes, index, count, configuration, description) {
+    if (!configuration)
+      throw new Error("Configuration required");
+
+    this.bytes         = bytes;
+    this.byteReader    = encoding.makeByteReader(bytes, index, count);
+    this.scratchBytes  = new Uint8Array  (128);
+    this.scratchU32    = new Uint32Array (this.scratchBytes.buffer);
+    this.scratchI32    = new Int32Array  (this.scratchBytes.buffer);
+    this.scratchF64    = new Float64Array(this.scratchBytes.buffer);
+    this.configuration = configuration;
+    this.description   = description || null;
   }
 
   ValueReader.prototype.peekByte = function (offset) {
@@ -111,8 +116,8 @@
         b2 = this.byteReader.peek(1),
         b3 = this.byteReader.peek(2);
 
-    if (!common.EnableVarints) {
-      if (common.ThreeByteIndices)
+    if (!this.configuration.EnableVarints) {
+      if (this.configuration.ThreeByteIndices)
         return this.readUint24();
       else
         return this.readUint32();
@@ -125,7 +130,7 @@
   };
 
   ValueReader.prototype.readVarInt32 = function () {
-    if (!common.EnableVarints)
+    if (!this.configuration.EnableVarints)
       return this.readInt32();
 
     var result = common.readLEBInt32(this.byteReader);
@@ -174,7 +179,7 @@
   ValueReader.prototype.readUtf8String = function () {
     var length = 0, position;
 
-    if (!common.NullTerminatedStrings) {
+    if (!this.configuration.NullTerminatedStrings) {
       length = this.readVarUint32();
       if (length === false)
         return false;
@@ -194,7 +199,7 @@
 
     var result = encoding.UTF8.decode(this.bytes, position, length);
 
-    if (!common.NullTerminatedStrings)
+    if (!this.configuration.NullTerminatedStrings)
       this.byteReader.skip(length);
 
     return result;
@@ -207,7 +212,7 @@
     var description = this.readUtf8String();
     var length = this.readUint32();
 
-    var result = new ValueReader(this.bytes, this.byteReader.getPosition(), length, description);
+    var result = new ValueReader(this.bytes, this.byteReader.getPosition(), length, this.configuration, description);
 
     this.byteReader.skip(length);
 
@@ -224,8 +229,9 @@
   };
 
 
-  function JsAstModule (shapes) {
-    this.shapes  = shapes;
+  function JsAstModule (configuration, shapes) {
+    this.configuration = configuration;
+    this.shapes        = shapes;
 
     this.valueStreams = Object.create(null);
     this.typeTagStream = null;
@@ -241,7 +247,7 @@
 
 
   function readTypeTag (reader, module) {
-    if (common.TypeTagStream)
+    if (module.configuration.TypeTagStream)
       reader = module.typeTagStream;
 
     var tagIndex = reader.readVarUint32();
@@ -381,7 +387,7 @@
 
 
   function getReaderForField (defaultReader, module, field, tag) {
-    if (common.ValueStreamPerType) {
+    if (module.configuration.ValueStreamPerType) {
       var reader = module.valueStreams[tag];
       if (!reader)
         throw new Error("No value stream for tag '" + tag + "'");
@@ -398,6 +404,13 @@
         var shape = module.shapes.get(t);
         return shape;
       });
+
+      if (
+        overrideReader &&
+        common.NoOverridingPrimitiveStream &&
+        common.TagIsPrimitive[tag]
+      )
+        overrideReader = false;
 
       if (!overrideReader) {
         var oldReader = reader;
@@ -428,7 +441,10 @@
     if (isInline) {
       var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
 
-      if (common.ValueStreamPerType && common.PartitionedInlining) {
+      if (
+        module.configuration.ValueStreamPerType && 
+        module.configuration.PartitionedInlining
+      ) {
         reader = module.valueStreams[shapeName];
         shouldOverride = true;
         if (trace)
@@ -510,8 +526,8 @@
   };
 
 
-  function bytesToModule (bytes, shapes) {
-    var reader = new ValueReader(bytes, 0, bytes.length, "module");
+  function bytesToModule (configuration, shapes, bytes) {
+    var reader = new ValueReader(bytes, 0, bytes.length, configuration, "module");
 
     var magic = reader.readBytes(common.Magic.length);
     if (JSON.stringify(magic) !== JSON.stringify(common.Magic)) {
@@ -519,7 +535,7 @@
       throw new Error("Magic header does not match");
     }
 
-    var result = new JsAstModule(shapes);
+    var result = new JsAstModule(configuration, shapes);
 
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
@@ -547,14 +563,14 @@
     console.timeEnd("  read string tables");
 
 
-    if (common.ConditionalInlining)
+    if (configuration.ConditionalInlining)
       result.inliningStream = reader.readSubstream();
 
-    if (common.TypeTagStream)
+    if (configuration.TypeTagStream)
       result.typeTagStream = reader.readSubstream();
 
 
-    if (common.ValueStreamPerType)
+    if (configuration.ValueStreamPerType)
     for (var i = 0; i < result.tags.length; i++) {
       var tagIndex = reader.readIndex();
       var tag = result.tags[tagIndex];
@@ -583,15 +599,10 @@
   };
 
 
-  function moduleToAst (module) {
-    return module.root;
-  };
-
   exports.PrettyJson    = common.PrettyJson;
 
   exports.ShapeTable    = common.ShapeTable;
   exports.ValueReader   = ValueReader;
 
   exports.bytesToModule = bytesToModule;
-  exports.moduleToAst   = moduleToAst;
 }));

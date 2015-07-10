@@ -9,8 +9,9 @@
     factory((root.astEncoder = {}));
   }
 }(this, function (exports) {
-  var common = require("./ast-common.js");
-  var treeBuilder = require("./parse/treebuilder.js");
+  var common        = require("./ast-common.js");
+  var Configuration = require("./configuration.js");
+  var treeBuilder   = require("./parse/treebuilder.js");
 
   var AsmlikeJsonTreeBuilder = treeBuilder.AsmlikeJSON;  
   var NamedTable   = common.NamedTable,
@@ -24,7 +25,7 @@
   var TraceInlining = false;
   var TraceInlinedTypeCount = 0;
 
-  function ValueWriter (description, parent) {
+  function ValueWriter (configuration, description, parent) {
     // HACK: Default max size 128mb because growable buffers are effort
     var capacity = (1024 * 1024) * 128;
     if (parent)
@@ -39,7 +40,11 @@
     else
       this.varintSizes = [0, 0, 0, 0, 0, 0];
 
-    this.description = description;
+    if (!configuration)
+      throw new Error("configuration required");
+
+    this.configuration = configuration;
+    this.description   = description;
   };
 
   ValueWriter.prototype.getPosition = function () {
@@ -116,7 +121,7 @@
   };
 
   ValueWriter.prototype.writeVarUint32 = function (value) {
-    if (common.EnableVarints) {
+    if (this.configuration.EnableVarints) {
       if (IoTrace)
         console.log(this.description + " write varuint", value.toString(16));
 
@@ -128,7 +133,7 @@
 
       // HACK for checking inlining markers
       return this.bytes[before];
-    } else if (common.ThreeByteIndices) {
+    } else if (this.configuration.ThreeByteIndices) {
       this.writeUint24(value);
     } else {
       this.writeUint32(value);
@@ -136,7 +141,7 @@
   };
 
   ValueWriter.prototype.writeVarInt32 = function (value) {
-    if (common.EnableVarints) {
+    if (this.configuration.EnableVarints) {
       if (IoTrace)
         console.log(this.description + " write varint", value.toString(16));
 
@@ -206,12 +211,12 @@
     // Encode but discard bytes to compute length
     encoding.UTF8.encode(text, counter);
 
-    if (!common.NullTerminatedStrings)
+    if (!this.configuration.NullTerminatedStrings)
       this.writeVarUint32(lengthBytes);
 
     encoding.UTF8.encode(text, this);
 
-    if (common.NullTerminatedStrings)
+    if (this.configuration.NullTerminatedStrings)
       this.writeByte(0);
   };
 
@@ -241,8 +246,9 @@
   };
 
 
-  function JsAstModule (shapes) {
-    this.shapes  = shapes;
+  function JsAstModule (configuration, shapes) {
+    this.configuration = configuration;
+    this.shapes        = shapes;
 
     // Used to store the inferred type tags for arrays during
     //  the initial tree-walk
@@ -290,7 +296,7 @@
     // Type tag
     var size = estimatedIndexSize;
     // Inlining flag
-    if (common.ConditionalInlining)
+    if (this.configuration.ConditionalInlining)
       size += 1;
 
     for (var i = 0, l = shape.shape.fields.length; i < l; i++) {
@@ -370,13 +376,13 @@
     this.tags.forEach(function (entry) {
       var tag = entry.get_name();
 
-      self.valueStreams[tag] = new ValueWriter("values[" + tag + "]", writer);
+      self.valueStreams[tag] = new ValueWriter(self.configuration, "values[" + tag + "]", writer);
     });
   };
 
 
   JsAstModule.prototype.getValueWriterForField = function (defaultWriter, field, tag) {
-    if (common.ValueStreamPerType) {
+    if (this.configuration.ValueStreamPerType) {
       var writer = this.valueStreams[tag];
       if (!writer)
         throw new Error("No value stream for tag '" + tag + "'");
@@ -390,7 +396,7 @@
 
   JsAstModule.prototype.writeTypeTag = function (defaultWriter, tag) {
     var writer = defaultWriter;
-    if (common.TypeTagStream)
+    if (this.configuration.TypeTagStream)
       writer = this.typeTagWriter;
 
     writer.writeVarUint32(tag);
@@ -402,6 +408,13 @@
   JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex, overrideWriter) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
+
+    if (
+      overrideWriter &&
+      this.configuration.NoOverridingPrimitiveStream &&
+      common.TagIsPrimitive[tag]
+    )
+      overrideWriter = false;
 
     try {
       if (!overrideWriter) {
@@ -708,10 +721,13 @@
   };
 
 
-  function JsAstModuleBuilder (shapes) {
+  function JsAstModuleBuilder (configuration, shapes) {
     AsmlikeJsonTreeBuilder.call(this);
 
-    this.result = new JsAstModule(shapes);
+    this.configuration = configuration;
+    this.shapes = shapes;
+
+    this.result = new JsAstModule(configuration, shapes);
 
     this.walkedCount = 0;
     this.progressInterval = 100000;
@@ -841,13 +857,13 @@
 
 
   // Converts a JsAstModule into bytes and writes them into byteWriter.
-  function serializeModule (module, byteWriter, stats) {
-    var writer = new ValueWriter("module");
+  function serializeModule (module) {
+    var writer = new ValueWriter(module.configuration, "module");
 
     writer.writeBytes(common.Magic);
 
     var omitCount = 0, totalCount = module.objects.get_count();
-    if (common.ConditionalInlining) {
+    if (module.configuration.ConditionalInlining) {
       var self = this;
       var maybeOmitCallback = function (id) {
         var hitCount = id.get_hit_count();
@@ -881,30 +897,30 @@
     writer.writeUint32(stringCount);
     writer.writeUint32(objectCount);
 
-    var tagWriter = new ValueWriter("tag table", writer);
+    var tagWriter = new ValueWriter(module.configuration, "tag table", writer);
     module.serializeTable(tagWriter, module.tags, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
-    var stringWriter = new ValueWriter("string table", writer);
+    var stringWriter = new ValueWriter(module.configuration, "string table", writer);
     module.serializeTable(stringWriter, module.strings, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
-    if (common.ConditionalInlining)
-      module.inliningWriter = new ValueWriter("inlining flags", writer);
+    if (module.configuration.ConditionalInlining)
+      module.inliningWriter = new ValueWriter(module.configuration, "inlining flags", writer);
 
-    if (common.TypeTagStream)
-      module.typeTagWriter = new ValueWriter("type tags", writer);
+    if (module.configuration.TypeTagStream)
+      module.typeTagWriter = new ValueWriter(module.configuration, "type tags", writer);
 
-    if (common.ValueStreamPerType)
+    if (module.configuration.ValueStreamPerType)
       module.createValueStreams(writer);
 
-    var objectWriter = new ValueWriter("object table", writer);
+    var objectWriter = new ValueWriter(module.configuration, "object table", writer);
     module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
 
 
-    var rootWriter = new ValueWriter("root node");
+    var rootWriter = new ValueWriter(module.configuration, "root node", writer);
     module.serializeValueWithKnownTag(rootWriter, module.root, "any", null);
 
 
@@ -912,14 +928,14 @@
     writer.writeSubstream(stringWriter);
 
 
-    if (common.ConditionalInlining)
+    if (module.configuration.ConditionalInlining)
       writer.writeSubstream(module.inliningWriter);
 
-    if (common.TypeTagStream)
+    if (module.configuration.TypeTagStream)
       writer.writeSubstream(module.typeTagWriter);
 
 
-    if (common.ValueStreamPerType)
+    if (module.configuration.ValueStreamPerType)
     for (var key in module.valueStreams) {
       var valueStream = module.valueStreams[key];
       writer.writeIndex(module.tags.get_index(key));      
@@ -933,7 +949,7 @@
     if (omitCount > 0)
       console.log("objects written inline:", omitCount, "(" + (omitCount * 100 / totalCount).toFixed(1) + "%)");
 
-    if (common.TypeTagStream)
+    if (module.configuration.TypeTagStream)
       console.log("type tags written:", module.typeTagsWritten);
 
     console.log("any-typed values written:", module.anyTypeValuesWritten);

@@ -5,17 +5,24 @@ require('./node-augh.js');
 require('./third_party/encoding/encoding.js');
 
 var common = require("./ast-common.js");
+var Configuration = require("./configuration.js");
 var astDecoder = require('./ast-decoder.js');
 var fs = require('fs');
 
 if (process.argv.length < 4) {
-  console.log("USAGE: decode input.webasm output.js [astOutput.json]");
+  console.log("USAGE: decode input.webasm [astOutput.json] [configuration.json]");
   process.exit(1);
 }
 
 var inputFile = process.argv[2];
-var outputFile = process.argv[3];
-var outputAstFile = process.argv[4];
+var outputAstFile = process.argv[3];
+var configurationPath = process.argv[4];
+
+var configuration = new Configuration.Default();
+if (configurationPath)
+  configuration = Configuration.FromJson(
+    fs.readFileSync(configurationPath, { encoding: "utf8" })
+  );
 
 var inputBuffer = fs.readFileSync(inputFile), inputBytes;
 if (inputBuffer.toArrayBuffer)
@@ -28,7 +35,7 @@ var shapes = astDecoder.ShapeTable.fromJson(
 );
 
 console.time("bytesToModule");
-var inputModule = astDecoder.bytesToModule(inputBytes, shapes);
+var inputModule = astDecoder.bytesToModule(configuration, shapes, inputBytes);
 console.timeEnd("bytesToModule");
 
 inputBytes = null;
@@ -36,12 +43,9 @@ if ((typeof (global) !== "undefined") && global.gc) {
   global.gc();
 }
 
-var outputAst = astDecoder.moduleToAst(inputModule);
+var outputAst = inputModule.root;
 
 console.log("heapUsed " + process.memoryUsage().heapUsed);
-
-if (false)
-  astutil.assertNoCycles(outputAst);
 
 if (common.DumpJson && outputAstFile) {
   var json;

@@ -5,20 +5,27 @@ require('./node-augh.js');
 require('./third_party/encoding/encoding.js');
 
 var common = require("./ast-common.js");
+var Configuration = require("./configuration.js");
 var asmParse = require('./third_party/cashew/asm-parse.js');
 var astEncoder = require('./ast-encoder.js');
 var treeBuilder = require("./parse/treebuilder.js");
 var fs = require('fs');
 
 if (process.argv.length < 4) {
-  console.log("USAGE: encode input.js output.webasm [astOutput.json] [expectedOutput.js]");
+  console.log("USAGE: encode input.js output.webasm [astOutput.json] [configuration.json]");
   process.exit(1);
 }
 
 var inputFile = process.argv[2];
 var outputFile = process.argv[3];
 var outputAstFile = process.argv[4];
-var expectedOutputJsFile = process.argv[5];
+var configurationPath = process.argv[5];
+
+var configuration = new Configuration.Default();
+if (configurationPath)
+  configuration = Configuration.FromJson(
+    fs.readFileSync(configurationPath, { encoding: "utf8" })
+  );
 
 var shapes = astEncoder.ShapeTable.fromJson(
   fs.readFileSync("shapes-jsontree.json", { encoding: "utf8" })
@@ -30,35 +37,18 @@ var fdOut = fs.openSync(outputFile, "w");
 var inputReader = encoding.makeCharacterReader(inputJs);
 var astBuilder;
 
-if (common.DeduplicateObjects) {
+if (configuration.DeduplicateObjects) {
   var deduplicatingModuleBuilder = treeBuilder.MakeDeduplicating(
     astEncoder.JsAstModuleBuilder,
     common.GetObjectId,
-    common.DeduplicationUsageThreshold
+    configuration.DeduplicationUsageThreshold
   );
-  astBuilder = new deduplicatingModuleBuilder(shapes);
+  astBuilder = new deduplicatingModuleBuilder(configuration, shapes);
 } else {
-  astBuilder = new astEncoder.JsAstModuleBuilder(shapes);
+  astBuilder = new astEncoder.JsAstModuleBuilder(configuration, shapes);
 }
 
-if (true) {
-  var configuration = Object.create(null);
-  var omittedKeys = ["Magic", "TagIsPrimitive"];
-
-  for (var k in common) {
-    if (omittedKeys.indexOf(k) >= 0)
-      continue;
-    else if (
-      (typeof (common[k]) === "object") ||
-      (typeof (common[k]) === "function")
-    )
-      continue;
-
-    configuration[k] = common[k];
-  }
-
-  console.log(JSON.stringify(configuration, null, 2));
-}
+console.log(Configuration.ToJson(configuration));
 
 console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);
@@ -76,7 +66,7 @@ if (common.DumpJson && outputAstFile) {
 
 var outputModule = astBuilder.finish(inputAst);
 
-if (common.DeduplicateObjects) {
+if (configuration.DeduplicateObjects) {
   console.log(
     "Early-deduplicated " + astBuilder.nodesPruned + 
     " node(s) (" + 
