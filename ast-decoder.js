@@ -551,16 +551,12 @@
       return text;
     };
 
-    console.time("  read tags");
     var tagReader    = reader.readSubstream();
     result.tags = deserializeTable(tagReader, readUtf8String);
-    console.timeEnd("  read tags");
 
 
-    console.time("  read string tables");
     var stringReader = reader.readSubstream();
     result.strings = deserializeTable(stringReader, readUtf8String);
-    console.timeEnd("  read string tables");
 
 
     if (configuration.ConditionalInlining)
@@ -582,12 +578,9 @@
 
     allocateObjectTable(result, objectCount);
 
-
-    console.time("  read objects");
-
     var objectReader = reader.readSubstream();
     deserializeObjectTable(objectReader, result);
-    console.timeEnd("  read objects");
+
 
     var rootReader = reader.readSubstream();
 

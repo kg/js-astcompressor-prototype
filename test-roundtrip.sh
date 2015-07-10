@@ -25,7 +25,6 @@ node --expose-gc -e "try { var json = require('fs').readFileSync('Test/$FILE_PRE
 echo // decoding
 node --expose-gc --nouse-idle-notification --max-old-space-size=8192 decode.js Test/$FILE_PREFIX.webasm Test/$FILE_PREFIX.ast.decoded.json $CONFIGURATION
 echo // size comparison
-./size-comparison.sh $INFILE
 ./size-comparison.sh Test/$FILE_PREFIX.webasm
-echo // diff follows
+echo // diff
 diff Test/$FILE_PREFIX.ast.json Test/$FILE_PREFIX.ast.decoded.json
