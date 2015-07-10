@@ -38,7 +38,7 @@
     if (parent)
       this.varintSizes = parent.varintSizes;
     else
-      this.varintSizes = [0, 0, 0, 0, 0, 0];
+      this.varintSizes = [0, 0, 0, 0, 0];
 
     if (!configuration)
       throw new Error("configuration required");
@@ -952,7 +952,6 @@
     if (module.configuration.TypeTagStream)
       console.log("type tags written:", module.typeTagsWritten);
 
-    console.log("any-typed values written:", module.anyTypeValuesWritten);
     console.log("varint sizes:", writer.varintSizes);
 
     return writer.toArray();

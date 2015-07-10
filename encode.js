@@ -22,10 +22,14 @@ var outputAstFile = process.argv[4];
 var configurationPath = process.argv[5];
 
 var configuration = new Configuration.Default();
-if (configurationPath)
+if (configurationPath) {
+  console.log("// Configuration " + configurationPath);
   configuration = Configuration.FromJson(
     fs.readFileSync(configurationPath, { encoding: "utf8" })
   );
+} else {
+  console.log("// Configuration (default)");
+}
 
 var shapes = astEncoder.ShapeTable.fromJson(
   fs.readFileSync("shapes-jsontree.json", { encoding: "utf8" })
@@ -47,8 +51,6 @@ if (configuration.DeduplicateObjects) {
 } else {
   astBuilder = new astEncoder.JsAstModuleBuilder(configuration, shapes);
 }
-
-console.log(Configuration.ToJson(configuration));
 
 console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);
