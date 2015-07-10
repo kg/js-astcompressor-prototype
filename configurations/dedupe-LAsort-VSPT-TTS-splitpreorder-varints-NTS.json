@@ -1,0 +1,21 @@
+{
+  "DeduplicateObjects": true,
+  "DeduplicationUsageThreshold": 1,
+  "EnableVarints": true,
+  "SortTables": true,
+  "LocalityAwareSorting": true,
+  "LargeTableThreshold": 8192,
+  "LocalityCutoffSmall": 128,
+  "LocalityCutoffLarge": 8192,
+  "LocalityMinimumThreshold": 3,
+  "InlineUseCountThreshold": 10,
+  "InlineObjectSizeThreshold": null,
+  "ConditionalInlining": true,
+  "PartitionedInlining": true,
+  "NoOverridingPrimitiveStream": false,
+  "RelativeIndexes": false,
+  "TypeTagStream": true,
+  "ValueStreamPerType": true,
+  "ThreeByteIndices": false,
+  "NullTerminatedStrings": true
+}

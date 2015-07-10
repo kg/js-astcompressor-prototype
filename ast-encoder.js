@@ -812,7 +812,7 @@
     this.walkedCount++;
     if ((this.walkedCount % this.progressInterval) === 0) {
       if (typeof (process) === "object")
-        process.stdout.write(".");
+        process.stderr.write(".");
     }
 
     if (Array.isArray(node)) {

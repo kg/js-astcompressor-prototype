@@ -56,16 +56,6 @@ console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);
 console.timeEnd("asm-parse");
 
-if (common.DumpJson && outputAstFile) {
-  var json;
-  if (astEncoder.PrettyJson)
-    json = JSON.stringify(inputAst, null, 2)
-  else
-    json = JSON.stringify(inputAst);
-
-  fs.writeFileSync(outputAstFile, json);
-}
-
 var outputModule = astBuilder.finish(inputAst);
 
 if (configuration.DeduplicateObjects) {
@@ -84,5 +74,15 @@ var bytes = astEncoder.serializeModule(outputModule);
 console.timeEnd("serializeModule");
 
 fs.writeSync(fdOut, new Buffer(bytes), 0, bytes.length);
+
+if (common.DumpJson && outputAstFile) {
+  var json;
+  if (astEncoder.PrettyJson)
+    json = JSON.stringify(inputAst, null, 2)
+  else
+    json = JSON.stringify(inputAst);
+
+  fs.writeFileSync(outputAstFile, json);
+}
 
 fs.closeSync(fdOut);
