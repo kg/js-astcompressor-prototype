@@ -282,7 +282,7 @@
 
   function readMaybeRelativeIndex (reader, baseIndex) {
     if (
-      common.RelativeIndexes &&
+      reader.configuration.RelativeIndexes &&
       typeof (baseIndex) === "number"
     ) {
       return reader.readRelativeIndex(baseIndex);
@@ -307,7 +307,7 @@
     objectTable = module.objects;
 
     var shouldConditionalInline = 
-      common.ConditionalInlining &&
+      reader.configuration.ConditionalInlining &&
       (tag !== "any") &&
       (tag !== "string");
 
@@ -407,7 +407,7 @@
 
       if (
         overrideReader &&
-        common.NoOverridingPrimitiveStream &&
+        reader.configuration.NoOverridingPrimitiveStream &&
         common.TagIsPrimitive[tag]
       )
         overrideReader = false;

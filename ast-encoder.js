@@ -281,7 +281,7 @@
 
 
   JsAstModule.prototype.isShapeSmall = function (shape) {
-    if (typeof (common.InlineObjectSizeThreshold) !== "number")
+    if (typeof (this.configuration.InlineObjectSizeThreshold) !== "number")
       return false;
 
     var result = this.isShapeSmallCache.get(shape);
@@ -289,7 +289,7 @@
       return result;
 
     var estimatedIndexSize = 
-      common.EnableVarints
+      this.configuration.EnableVarints
         ? 3 // FIXME: 2?
         : 4;
 
@@ -321,7 +321,7 @@
       }
     }
 
-    result = (size <= common.InlineObjectSizeThreshold);
+    result = (size <= this.configuration.InlineObjectSizeThreshold);
     this.isShapeSmallCache.set(shape, result);
     return result;
   };
@@ -459,8 +459,8 @@
         console.log("Inlined", shape.name, shape.tagIndex.toString(16));
 
       if (
-        common.ValueStreamPerType && 
-        common.PartitionedInlining
+        this.configuration.ValueStreamPerType && 
+        this.configuration.PartitionedInlining
       ) {
         writer = this.valueStreams[shape.name];
         shouldOverride = true;
@@ -614,7 +614,7 @@
     }
 
     var shouldConditionalInline = 
-      common.ConditionalInlining &&
+      this.configuration.ConditionalInlining &&
       (tag !== "any") &&
       (tag !== "string");
 
@@ -684,7 +684,7 @@
       // There's only one global object table, so we can encode everything
       //  as a single index.
       if (
-        common.RelativeIndexes && 
+        this.configuration.RelativeIndexes && 
         (typeof (baseIndex) === "number")
       ) {
         // FIXME: Sometimes baseIndex will be undefined/null if the parent was inlined
@@ -869,7 +869,7 @@
       var maybeOmitCallback = function (id) {
         var hitCount = id.get_hit_count();
         var shape = module.getShapeForObject(id.get_value());
-        var omitDueToHitCount = hitCount <= common.InlineUseCountThreshold,
+        var omitDueToHitCount = hitCount <= module.configuration.InlineUseCountThreshold,
           omitDueToSize = false;
 
         if (shape)
