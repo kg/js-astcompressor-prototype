@@ -1,8 +1,2 @@
-conditional object inlining (based on use count)
-  pre-order
-  post-order
-  inline all field values? or 'inline' into the value streams?
-
-conditional deduplication
-  only deduplicate if more than N uses
-  do this early in order to preserve relative ordering of nodes, possibly improve compression?
+post-order
+split string length headers into a stream
