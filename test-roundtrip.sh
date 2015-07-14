@@ -27,7 +27,7 @@ rm -f $OUTFILE.ast.json $OUTFILE.ast.json
 echo // encoding
 node --expose-gc --nouse-idle-notification --max-old-space-size=8192 encode.js $INFILE $OUTFILE $OUTFILE.ast.json $CONFIGURATION
 echo // read ast json
-node --expose-gc -e "try { var json = require('fs').readFileSync('$OUTFILE.ast.json', { encoding: 'utf8' }); console.time('JSON.parse'); var tree = JSON.parse(json); console.timeEnd('JSON.parse'); json = null; global.gc(); console.log('heapUsed ' + process.memoryUsage().heapUsed); } catch (e) { console.log('failed: no ast'); }"
+node --expose-gc parse-json.js "$OUTFILE.ast.json"
 echo // decoding
 node --expose-gc --nouse-idle-notification --max-old-space-size=8192 decode.js $OUTFILE $OUTFILE.ast.decoded.json $CONFIGURATION
 echo // size comparison
