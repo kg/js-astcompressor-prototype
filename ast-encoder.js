@@ -199,6 +199,16 @@
   };
 
   ValueWriter.prototype.writeUtf8String = function (text) {
+    // HACK so we can encode null strings as distinct from ""
+    if (text === null) {
+      if (this.configuration.NullTerminatedStrings)
+        this.writeByte(0xFF);
+      else
+        this.writeIndex(0xFFFFFFFF);
+
+      return;
+    }
+
     var lengthBytes = 0;
     var counter = {
       write: function (byte) {
@@ -212,7 +222,7 @@
     encoding.UTF8.encode(text, counter);
 
     if (!this.configuration.NullTerminatedStrings)
-      this.writeVarUint32(lengthBytes);
+      this.writeIndex(lengthBytes);
 
     encoding.UTF8.encode(text, this);
 
@@ -257,7 +267,6 @@
     this.isShapeSmallCache = new WeakMap();
 
     this.tags    = new StringTable("tag");
-    this.strings = new StringTable("string");
 
     this.tags.add("any");
     this.tags.add("array");
@@ -533,7 +542,7 @@
       return null;
 
     if (tag === "string")
-      return this.strings;
+      return null;
     else {
       var shape = this.shapes.get(tag);
       if (shape) {
@@ -567,6 +576,10 @@
 
       case "double":
         writer.writeFloat64(value);
+        return;
+
+      case "string":
+        writer.writeUtf8String(value);
         return;
 
       case "any": {
@@ -716,7 +729,6 @@
 
   JsAstModule.prototype.finalize = function () {
     this.tags   .finalize(0);
-    this.strings.finalize(0);
     this.objects.finalize(0);
   };
 
@@ -891,20 +903,13 @@
     //  use that to reconstruct relationships in a single pass.
 
     var tagCount    = module.tags.get_count();
-    var stringCount = module.strings.get_count();
     var objectCount = module.objects.get_count();
 
     writer.writeUint32(tagCount);
-    writer.writeUint32(stringCount);
     writer.writeUint32(objectCount);
 
     var tagWriter = new ValueWriter(module.configuration, "tag table", writer);
     module.serializeTable(tagWriter, module.tags, true, function (_, value) {
-      _.writeUtf8String(value);
-    });
-
-    var stringWriter = new ValueWriter(module.configuration, "string table", writer);
-    module.serializeTable(stringWriter, module.strings, true, function (_, value) {
       _.writeUtf8String(value);
     });
 
@@ -926,7 +931,6 @@
 
 
     writer.writeSubstream(tagWriter);
-    writer.writeSubstream(stringWriter);
 
 
     if (module.configuration.ConditionalInlining)

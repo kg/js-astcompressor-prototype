@@ -180,9 +180,13 @@
     var length = 0, position;
 
     if (!this.configuration.NullTerminatedStrings) {
-      length = this.readVarUint32();
+      length = this.readIndex();
       if (length === false)
         return false;
+
+      // HACK So we can encode null distinct from ""
+      if (length === 0xFFFFFFFF)
+        return null;
 
       if (length === 0)
         return "";
@@ -190,6 +194,10 @@
       position = this.byteReader.getPosition();
 
     } else {
+      // HACK So we can encode null distinct from ""
+      if (this.peekByte() === 0xFF)
+        return null;
+
       var b;
 
       position = this.byteReader.getPosition();
@@ -238,7 +246,6 @@
     this.inliningStream = null;
 
     this.tags    = null;
-    this.strings = null;
 
     this.objects = null;
 
@@ -343,10 +350,10 @@
       }
 
       case "string":
-        var index = readMaybeRelativeIndex(reader, baseIndex);
         if (IoTrace)
           console.log(reader.description + " read  string");
-        return getTableEntry(module.strings, index);
+        var string = reader.readUtf8String();
+        return string;
 
       case "array":
         var length = reader.readVarUint32();
@@ -540,7 +547,6 @@
     // The lengths are stored in front of the tables themselves,
     //  this simplifies table deserialization...
     var tagCount    = reader.readUint32();
-    var stringCount = reader.readUint32();
     var objectCount = reader.readUint32();
 
 
@@ -553,10 +559,6 @@
 
     var tagReader    = reader.readSubstream();
     result.tags = deserializeTable(tagReader, readUtf8String);
-
-
-    var stringReader = reader.readSubstream();
-    result.strings = deserializeTable(stringReader, readUtf8String);
 
 
     if (configuration.ConditionalInlining)
