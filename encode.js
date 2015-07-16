@@ -39,18 +39,18 @@ var inputJs = fs.readFileSync(inputFile, { encoding: "utf8" });
 var fdOut = fs.openSync(outputFile, "w");
 
 var inputReader = encoding.makeCharacterReader(inputJs);
-var astBuilder;
+
+var astBuilderType = astEncoder.JsAstModuleBuilder;
 
 if (configuration.DeduplicateObjects) {
-  var deduplicatingModuleBuilder = treeBuilder.MakeDeduplicating(
-    astEncoder.JsAstModuleBuilder,
+  astBuilderType = treeBuilder.MakeDeduplicating(
+    astBuilderType,
     common.GetObjectId,
     configuration.DeduplicationUsageThreshold
   );
-  astBuilder = new deduplicatingModuleBuilder(configuration, shapes);
-} else {
-  astBuilder = new astEncoder.JsAstModuleBuilder(configuration, shapes);
 }
+
+var astBuilder = new (astBuilderType)(configuration, shapes);
 
 console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);

@@ -70,13 +70,18 @@
       var table = this.$getTable(obj.type);
       this.nodesFinalized += 1;      
 
-      // TODO: Generate some sort of cheap in teger hash instead
+      // TODO: Generate some sort of cheap integer hash instead
       // TODO: Use shape table instead of walking properties
       var bruteForceHash = "";
       for (var k in obj) {
         var v = obj[k];
 
-        bruteForceHash = appendValueHash(bruteForceHash, v);
+        try {
+          bruteForceHash = appendValueHash(bruteForceHash, v);
+        } catch (e) {
+          console.log("Was interning o[" + k + "] for o=", obj);
+          throw e;
+        }
       }
 
       var interned = table[bruteForceHash];

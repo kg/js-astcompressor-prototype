@@ -562,14 +562,21 @@
 
     this.expectToken("separator", "{");
 
+    // HACK: Scope for argument names
+    this.builder.pushScope();
+
     var body = this.parseBlockInterior();
 
     if (TraceStatements)
       console.log("end of function", name);
 
-    return this.builder.makeFunctionExpression(
+    var result = this.builder.makeFunctionExpression(
       name, argumentNames, body
     );
+
+    this.builder.popScope();
+
+    return result;
   };
 
   // Parses complex keywords.
