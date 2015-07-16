@@ -18,11 +18,12 @@ var inputFile = process.argv[2];
 var outputAstFile = process.argv[3];
 var configurationPath = process.argv[4];
 
-var configuration = new Configuration.Default();
-if (configurationPath)
-  configuration = Configuration.FromJson(
-    fs.readFileSync(configurationPath, { encoding: "utf8" })
-  );
+if (!configurationPath)
+  throw new Error("Configuration file required");
+
+var configuration = Configuration.FromJson(
+  fs.readFileSync(configurationPath, { encoding: "utf8" })
+);
 
 var inputBuffer = fs.readFileSync(inputFile), inputBytes;
 if (inputBuffer.toArrayBuffer)

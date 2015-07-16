@@ -21,15 +21,13 @@ var outputFile = process.argv[3];
 var outputAstFile = process.argv[4];
 var configurationPath = process.argv[5];
 
-var configuration = new Configuration.Default();
-if (configurationPath) {
-  console.log("// Configuration " + configurationPath);
-  configuration = Configuration.FromJson(
-    fs.readFileSync(configurationPath, { encoding: "utf8" })
-  );
-} else {
-  console.log("// Configuration (default)");
-}
+if (!configurationPath)
+  throw new Error("Configuration file required");
+
+console.log("// Configuration " + configurationPath);
+var configuration = Configuration.FromJson(
+  fs.readFileSync(configurationPath, { encoding: "utf8" })
+);
 
 var shapes = astEncoder.ShapeTable.fromJson(
   fs.readFileSync("shapes-jsontree.json", { encoding: "utf8" })

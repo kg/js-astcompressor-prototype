@@ -17,5 +17,6 @@
   "TypeTagStream": true,
   "ValueStreamPerType": true,
   "ThreeByteIndices": false,
-  "NullTerminatedStrings": true
+  "NullTerminatedStrings": true,
+  "InternedNames": true
 }

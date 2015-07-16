@@ -9,24 +9,24 @@
     factory((root.configuration = {}));
   }
 }(this, function (exports) {
-  exports.Default = function () {
+  exports.Template = function () {
     // Prune duplicate objects before serializing a module.
-    this.DeduplicateObjects          = true;
+    this.DeduplicateObjects          = false;
 
     // At least this many identical nodes must exist for a node
     //  to be deduplicated.
     this.DeduplicationUsageThreshold = 1;
 
     // Write indices as LEB128 32-bit uints instead of 4-byte uints
-    this.EnableVarints               = true;
+    this.EnableVarints               = false;
 
     // Sorts the object table to reduce the average size of varints,
     //  and potentially improve stream compression in general.
-    this.SortTables                  = true;
+    this.SortTables                  = false;
     // Two-pass object table sort. Highest frequency use objects
     //  at the front of the table, then lower frequency use objects
     //  sorted sequentially to improve locality (and compression?)
-    this.LocalityAwareSorting        = true;
+    this.LocalityAwareSorting        = false;
     // Tables over this size use the larger locality cutoff.
     // Roughly, we want to use this as a heuristic for cases
     //  where indexes would otherwise frequently be 3 bytes
@@ -47,11 +47,11 @@
     this.InlineObjectSizeThreshold   = null; // 7;
 
     // See above
-    this.ConditionalInlining         = this.InlineUseCountThreshold !== null;
+    this.ConditionalInlining         = false;
 
     // If conditional inlining is active, writes inlined nodes
     //  into their value streams instead of into the current stream
-    this.PartitionedInlining         = true;
+    this.PartitionedInlining         = false;
 
     // When doing partitioned inlining, don't force primitive values
     //  (ints, floats) out of their streams  
@@ -62,10 +62,10 @@
     this.RelativeIndexes             = false;
 
     // Separate sequential stream for all type tags
-    this.TypeTagStream               = true;
+    this.TypeTagStream               = false;
 
     // Separate sequential streams of values, partitioned by type.
-    this.ValueStreamPerType          = true;
+    this.ValueStreamPerType          = false;
 
     // If varints are disabled, writes indices as 3-byte uints
     this.ThreeByteIndices            = false;
@@ -74,11 +74,11 @@
     this.NullTerminatedStrings       = false;
 
     // Maintains a scope chain and replaces names with numbered per-scope indices
-    this.InternedNames               = true;
+    this.InternedNames               = false;
   };
 
   exports.FromDictionary = function (dict) {
-    var result = new exports.Default();
+    var result = new exports.Template();
 
     for (var k in dict)
       result[k] = dict[k];
