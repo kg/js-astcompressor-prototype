@@ -158,31 +158,6 @@
     }
   };
 
-  ValueWriter.prototype.writeRelativeIndex = function (value, base) {
-    var relativeValue;
-
-    if (value === 0xFFFFFFFF) {
-      relativeValue = 0;
-    } else {
-      relativeValue = (value - base);  
-      if (relativeValue >= 0)
-        relativeValue += 1;
-    }
-
-    if (IoTrace)
-      console.log(
-        this.description + " write relindex " + 
-        (
-          (value === 0xFFFFFFFF)
-            ? "null"
-            : value
-        ) + 
-        " - " + base + " -> " + relativeValue
-      );
-
-    this.writeVarInt32(relativeValue);
-  };
-
   ValueWriter.prototype.writeIndex = function (value) {
     if (typeof (value) !== "number")
       throw new Error("writeIndex expected number");
@@ -412,18 +387,28 @@
   };
 
 
-  JsAstModule.prototype.writeTypeTag = function (defaultWriter, tag) {
+  JsAstModule.prototype.writeTypeTag = function (defaultWriter, tag, canBeInlined, isInline) {
     var writer = defaultWriter;
     if (this.configuration.TypeTagStream)
       writer = this.typeTagWriter;
 
-    writer.writeVarUint32(tag);
+    if (canBeInlined && this.configuration.PackedInliningFlags) {
+      // This ensures that index encoding is used for both type tags and
+      //  object indices, so that we can consistently spot the inlining tag
+      tag <<= 1;
+      if (isInline)
+        tag |= 0x1;
+
+      writer.writeIndex(tag);
+    } else {
+      writer.writeVarUint32(tag);
+    }
 
     this.typeTagsWritten += 1;
   };
 
 
-  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, baseIndex, overrideWriter) {
+  JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, overrideWriter) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
 
@@ -449,7 +434,7 @@
         console.log("field " + field.name + " writer forced + " + writer.description);
       }
 
-      this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
+      this.serializeValueWithKnownTag(writer, value, tag);
     } catch (exc) {
       console.log("Failed while writing field " + field.name + " of type " + shape.name);
       throw exc;
@@ -468,7 +453,7 @@
     if (IoTrace)
       console.log("// object body #" + index);
     
-    this.writeTypeTag(writer, shape.tagIndex);
+    this.writeTypeTag(writer, shape.tagIndex, true, isInline);
 
     var shouldOverride = false;
     if (isInline) {
@@ -497,7 +482,7 @@
         value = null;
 
       this.serializeFieldValue(
-        writer, shape, fd, value, index, shouldOverride
+        writer, shape, fd, value, shouldOverride
       );
 
       if (IoTrace)
@@ -568,7 +553,7 @@
 
 
   // Or unknown tag, if you pass 'any', because why not.
-  JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag, baseIndex) {
+  JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag) {
     switch (tag) {
       case "true":
       case "false":
@@ -613,9 +598,9 @@
 
         this.anyTypeValuesWritten += 1;
         var tagIndex = this.getIndexForTypeTag(tag);
-        this.writeTypeTag(writer, tagIndex);
+        this.writeTypeTag(writer, tagIndex, false);
 
-        return this.serializeValueWithKnownTag(writer, value, tag, baseIndex);
+        return this.serializeValueWithKnownTag(writer, value, tag);
       }
 
       case "array":
@@ -629,7 +614,7 @@
         // The tree-walker figured out whether we need to use 'any' earlier
         var elementTag = this.arrayTypeTags.get(value);
         var elementTagIndex = this.getIndexForTypeTag(elementTag);
-        this.writeTypeTag(writer, elementTagIndex);
+        this.writeTypeTag(writer, elementTagIndex, false);
 
         if (IoTrace)
           console.log("  Writing array of type " + elementTag + " with " + value.length + " item(s) to " + writer.description);
@@ -637,7 +622,7 @@
         try {
           for (var i = 0; i < value.length; i++) {
             var element = value[i];
-            this.serializeValueWithKnownTag(writer, element, elementTag, baseIndex);
+            this.serializeValueWithKnownTag(writer, element, elementTag);
           }
         } catch (e) {
           console.log("Failed while writing array with tag", elementTag);
@@ -656,7 +641,10 @@
       (tag !== "any");
 
     if (value === null) {
-      if (shouldConditionalInline) {
+      if (
+        shouldConditionalInline &&
+        !this.configuration.PackedInliningFlags
+      ) {
         if (TraceInlining)
           console.log("INLINED=2 " + tag);
 
@@ -701,7 +689,8 @@
           if (TraceInlining)
             console.log("INLINED=1 " + tag);
 
-          this.inliningWriter.writeByte(1);
+          if (!this.configuration.PackedInliningFlags)
+            this.inliningWriter.writeByte(1);
 
           var name = id.get_name();
           var shape = this.getShapeForObject(value);
@@ -724,21 +713,17 @@
             console.log("INLINED=0 " + tag);
 
           this.notInlinedObjects += 1;
-          this.inliningWriter.writeByte(0);
+
+          if (!this.configuration.PackedInliningFlags)
+            this.inliningWriter.writeByte(0);
         }
       }
 
-      // There's only one global object table, so we can encode everything
-      //  as a single index.
-      if (
-        this.configuration.RelativeIndexes && 
-        (typeof (baseIndex) === "number")
-      ) {
-        // FIXME: Sometimes baseIndex will be undefined/null if the parent was inlined
-        writer.writeRelativeIndex(index, baseIndex)
-      } else {
-        writer.writeIndex(index);
-      }
+      // Shift the index over by one bit to make room for the inline flag
+      if (this.configuration.PackedInliningFlags)
+        index <<= 1;
+
+      writer.writeIndex(index);
     } catch (err) {
       console.log("Failed while writing '" + tag + "'", value);
       throw err;

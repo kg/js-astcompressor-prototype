@@ -139,24 +139,6 @@
     return result;
   };
 
-  ValueReader.prototype.readRelativeIndex = function (baseIndex) {
-    var indexRaw = this.readVarInt32();
-    if (indexRaw === 0)
-      return 0xFFFFFFFF;
-
-    var result;
-    if (indexRaw > 0) {
-      result = baseIndex + indexRaw - 1;
-    } else {
-      result = baseIndex + indexRaw;
-    }
-
-    if (IoTrace)
-      console.log(this.description + " read relindex " + indexRaw + " + " + baseIndex + " -> " + result);
-
-    return result;
-  };
-
   ValueReader.prototype.readIndex = function () {
     var indexRaw = this.readVarUint32();
 
@@ -289,19 +271,7 @@
   };
 
 
-  function readMaybeRelativeIndex (reader, baseIndex) {
-    if (
-      reader.configuration.RelativeIndexes &&
-      typeof (baseIndex) === "number"
-    ) {
-      return reader.readRelativeIndex(baseIndex);
-    } else {
-      return reader.readIndex();
-    }
-  };
-
-
-  function readObject (reader, module, tag, baseIndex) {
+  function readObject (reader, module, tag) {
     var isUntypedObject = (tag === "object");
     if (!isUntypedObject) {
       var shape = module.shapes.get(tag);
@@ -318,27 +288,56 @@
     var shouldConditionalInline = 
       reader.configuration.ConditionalInlining &&
       (tag !== "any");
+    var index;
 
     if (shouldConditionalInline) {
-      var inlinedFlag = module.inliningStream.readByte();
+      var inlinedFlag = 0, inlinedTypeTag = null;
+
+      if (reader.configuration.PackedInliningFlags) {
+        index = reader.readIndex();
+        inlinedFlag = (index & 0x1);
+
+        if (index === 0xFFFFFFFF)
+          return null;
+        else
+          index >>= 1;
+
+        inlinedTypeTag = module.tags[index];
+        if (typeof (inlinedTypeTag) !== "string")
+          throw new Error("Read unknown type tag '" + index + "' from packed form");
+
+      } else {
+        inlinedFlag = module.inliningStream.readByte();
+      }
+
       if (TraceInlining)
         console.log("INLINED=" + inlinedFlag + " " + tag);
 
       if (inlinedFlag === 2) {
         return null;
+
       } else if (inlinedFlag === 1) {
         var result = new Object();
-        deserializeObjectContents(reader, module, result, null, true);
+
+        deserializeObjectContents(reader, module, result, true, inlinedTypeTag);
+
         return result;
+
+      } else if (!reader.configuration.PackedInliningFlags) {
+        index = reader.readIndex();
+
       } else {
+        // Index already initialized above
       }
+
+    } else {
+      index = reader.readIndex();
     }
 
-    var index = readMaybeRelativeIndex(reader, baseIndex);
     return getTableEntry(objectTable, index);
   };
 
-  function deserializeValueWithKnownTag (reader, module, tag, baseIndex) {
+  function deserializeValueWithKnownTag (reader, module, tag) {
     switch (tag) {
       case "any": {
         tag = readTypeTag(reader, module);
@@ -347,7 +346,7 @@
 
         if (IoTrace)
           console.log(reader.description + " read  any ->");
-        return deserializeValueWithKnownTag(reader, module, tag, baseIndex);
+        return deserializeValueWithKnownTag(reader, module, tag);
       }
 
       case "name":
@@ -378,7 +377,7 @@
             console.log(reader.description + " read  array of type " + elementTag + " with " + length + " element(s)");
 
           for (var i = 0; i < length; i++) {
-            var element = deserializeValueWithKnownTag(reader, module, elementTag, baseIndex);
+            var element = deserializeValueWithKnownTag(reader, module, elementTag);
             array[i] = element;
           }
         } else {
@@ -399,7 +398,7 @@
 
       default:
       case "object":
-        return readObject(reader, module, tag, baseIndex);
+        return readObject(reader, module, tag);
     }
 
     throw new Error("unexpected");
@@ -419,7 +418,7 @@
   };
 
 
-  function deserializeFieldValue (reader, module, shape, field, baseIndex, overrideReader) {
+  function deserializeFieldValue (reader, module, shape, field, overrideReader) {
       var tag = common.pickTagForField(field, function (t) {
         var shape = module.shapes.get(t);
         return shape;
@@ -446,13 +445,19 @@
         console.log("field " + field.name + " reader forced " + reader.description);
       }
 
-      var value = deserializeValueWithKnownTag(reader, module, tag, baseIndex);
+      var value = deserializeValueWithKnownTag(reader, module, tag);
       return value;
   }
 
 
-  function deserializeObjectContents (reader, module, obj, index, isInline) {
-    var shapeName = readTypeTag(reader, module);
+  function deserializeObjectContents (reader, module, obj, isInline, inlineTypeTag) {
+    var shapeName;
+
+    if (isInline && module.configuration.PackedInliningFlags) {
+      shapeName = inlineTypeTag;
+    } else {
+      shapeName = readTypeTag(reader, module);
+    }
 
     if (IoTrace)
       console.log("// object body #" + index);
@@ -484,7 +489,7 @@
     for (var i = 0, l = shape.fields.length; i < l; i++) {
       var fd = shape.fields[i];
 
-      var value = deserializeFieldValue(reader, module, shape, fd, index, shouldOverride);
+      var value = deserializeFieldValue(reader, module, shape, fd, shouldOverride);
 
       obj[fd.name] = value;
       if (IoTrace)
@@ -524,7 +529,7 @@
 
     for (var i = 0; i < count; i++) {
       var obj = table[i];
-      deserializeObjectContents(reader, module, obj, i);
+      deserializeObjectContents(reader, module, obj, false);
     }
   };
 

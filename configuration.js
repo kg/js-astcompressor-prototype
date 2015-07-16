@@ -57,10 +57,6 @@
     //  (ints, floats) out of their streams  
     this.NoOverridingPrimitiveStream = false;
 
-    // Encode indexes as signed values relative to the index of
-    //  the current object.
-    this.RelativeIndexes             = false;
-
     // Separate sequential stream for all type tags
     this.TypeTagStream               = false;
 
@@ -75,6 +71,10 @@
 
     // Maintains a scope chain and replaces names with numbered per-scope indices
     this.InternedNames               = false;
+
+    // Packs the inlining flag into index values instead of writing it separately
+    // This makes object references larger on average, but eliminates inline flags
+    this.PackedInliningFlags         = false;
   };
 
   exports.FromDictionary = function (dict) {
@@ -82,6 +82,9 @@
 
     for (var k in dict)
       result[k] = dict[k];
+
+    if (result.RelativeIndexes)
+        throw new Error("Relative indexes no longer supported");
 
     return result;
   };
