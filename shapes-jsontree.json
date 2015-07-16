@@ -3,14 +3,14 @@
   "shapes": {
     "MemberAccess": {
       "lhs": "Expression",
-      "memberName": "name"
+      "memberName": "symbol"
     },
     "ComputedMemberAccess": {
       "lhs": "Expression",
       "rhs": "Expression"
     },
     "Identifier": {
-      "identifier": "name"
+      "identifier": "symbol"
     },
     "RegExpLiteral": {
       "pattern": "string",
@@ -48,10 +48,10 @@
       "expression": "Expression"
     },
     "BreakStatement": {
-      "label": "name?"
+      "label": "symbol?"
     },
     "ContinueStatement": {
-      "label": "name?"
+      "label": "symbol?"
     },
     "ReturnStatement": {
       "expression": "Expression?"
@@ -63,7 +63,7 @@
       "expressions": ["Expression"]
     },
     "LabelStatement": {
-      "labels": ["name"],
+      "labels": ["symbol"],
       "labelled": "Statement | Expression"
     },
     "ForStatement": {
@@ -87,7 +87,7 @@
       "finallyBlock": "Block? | Statement?"
     },
     "ForInDeclaration": {
-      "variableName": "name",
+      "variableName": "symbol",
       "sequenceExpression": "Expression"
     },
     "ForInStatement": {
@@ -103,24 +103,24 @@
       "body": "Block? | Statement?"
     },
     "PostfixMutation": {
-      "operator": "name",
+      "operator": "symbol",
       "lhs": "Expression"
     },
     "PrefixMutation": {
-      "operator": "name",
+      "operator": "symbol",
       "rhs": "Expression"
     },
     "UnaryOperator": {
-      "operator": "name",
+      "operator": "symbol",
       "rhs": "Expression"
     },
     "BinaryOperator": {
-      "operator": "name",
+      "operator": "symbol",
       "lhs": "Expression",
       "rhs": "Expression"
     },
     "AssignmentOperator": {
-      "operator": "name",
+      "operator": "symbol",
       "lhs": "Expression",
       "rhs": "Expression"
     },
@@ -133,7 +133,7 @@
       "declarations": ["Declaration"]
     },
     "Declaration": {
-      "name": "name",
+      "name": "symbol",
       "initialValue": "Expression?"
     },
     "Invocation": {
@@ -149,8 +149,8 @@
       "falseStatement": "Block? | Statement?"
     },
     "Function": {
-      "name": "name?",
-      "argumentNames": ["name"],
+      "name": "symbol?",
+      "argumentNames": ["symbol"],
       "body": "Block"
     },
     "TopLevel": {

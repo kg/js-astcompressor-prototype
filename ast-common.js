@@ -491,7 +491,7 @@
       (declaredType !== "any") &&
       (declaredType !== "object") &&
       (declaredType !== "string") &&
-      (declaredType !== "name") &&
+      (declaredType !== "symbol") &&
       (declaredType !== "array") &&
       !exports.TagIsPrimitive[declaredType]
     ) {

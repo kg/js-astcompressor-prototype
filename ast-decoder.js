@@ -346,9 +346,9 @@
         return deserializeValueWithKnownTag(reader, module, tag);
       }
 
-      case "name":
+      case "symbol":
         if (IoTrace)
-          console.log(reader.description + " read  name");
+          console.log(reader.description + " read  symbol");
         
         if (module.configuration.InternedNames) {
           var index = reader.readIndex();

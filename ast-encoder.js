@@ -254,7 +254,7 @@
     this.tags.add("object");
     this.tags.add("boolean");
     this.tags.add("string");
-    this.tags.add("name");
+    this.tags.add("symbol");
     this.tags.add("integer");
     this.tags.add("number");
 
@@ -531,7 +531,7 @@
     if (actualValueTag === "null")
       return null;
 
-    if ((tag === "string") || (tag === "name"))
+    if ((tag === "string") || (tag === "symbol"))
       return null;
     else {
       var shape = this.shapes.get(tag);
@@ -572,7 +572,7 @@
         writer.writeUtf8String(value);
         return;
 
-      case "name":
+      case "symbol":
         if (this.configuration.InternedNames) {
           writer.writeIndex(value);
         } else {
