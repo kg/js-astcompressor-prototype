@@ -25,7 +25,7 @@
     ];
 
     this.scopeChain[0].$$count = 0;
-    this.internNames = false;
+    this.internSymbols = false;
   };
 
   AsmlikeJsonTreeBuilder.prototype = Object.create(JsonTreeBuilder.prototype);
@@ -58,6 +58,9 @@
 
   // Special-case for operator names
   AsmlikeJsonTreeBuilder.prototype.internOperator = function (operator) {
+    if (!this.internSymbols)
+      return operator;
+
     var index = this.operatorTable[operator];
 
     if (typeof (index) !== "number") {
@@ -70,7 +73,7 @@
   // FIXME: Externally visible names should have their names stored in a table somewhere
   //  in order to accurately capture the cost of those names
   AsmlikeJsonTreeBuilder.prototype.internName = function (name, externallyVisible) {
-    if (!this.internNames)
+    if (!this.internSymbols)
       return name;
 
     if (name === null)

@@ -18,6 +18,6 @@
   "ValueStreamPerType": true,
   "ThreeByteIndices": false,
   "NullTerminatedStrings": true,
-  "InternedNames": true,
+  "InternedSymbols": true,
   "PackedInliningFlags": false
 }

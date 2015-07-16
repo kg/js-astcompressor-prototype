@@ -350,7 +350,7 @@
         if (IoTrace)
           console.log(reader.description + " read  symbol");
         
-        if (module.configuration.InternedNames) {
+        if (module.configuration.InternedSymbols) {
           var index = reader.readIndex();
           return index;
         } else {

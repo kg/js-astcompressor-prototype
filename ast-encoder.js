@@ -573,7 +573,7 @@
         return;
 
       case "symbol":
-        if (this.configuration.InternedNames) {
+        if (this.configuration.InternedSymbols) {
           writer.writeIndex(value);
         } else {
           writer.writeUtf8String(value);
@@ -750,7 +750,7 @@
 
     this.result = new JsAstModule(configuration, shapes);
 
-    this.internNames = configuration.InternedNames;
+    this.internSymbols = configuration.InternedSymbols;
 
     this.walkedCount = 0;
     this.progressInterval = 20000;

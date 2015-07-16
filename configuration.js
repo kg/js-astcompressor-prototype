@@ -69,8 +69,8 @@
     // Null-terminated strings instead of length headers
     this.NullTerminatedStrings       = false;
 
-    // Maintains a scope chain and replaces names with numbered per-scope indices
-    this.InternedNames               = false;
+    // Maintains a scope chain and replaces symbols with numbered per-scope indices
+    this.InternedSymbols             = false;
 
     // Packs the inlining flag into index values instead of writing it separately
     // This makes object references larger on average, but eliminates inline flags
