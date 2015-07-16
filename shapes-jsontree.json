@@ -42,10 +42,6 @@
       "key": "double",
       "value": "Expression"
     },
-    "UnaryOperator": {
-      "operator": "string",
-      "rhs": "Expression"
-    },
     "NullStatement": {
     },
     "ExpressionStatement": {
@@ -107,20 +103,24 @@
       "body": "Block? | Statement?"
     },
     "PostfixMutation": {
-      "operator": "string",
+      "operator": "name",
       "lhs": "Expression"
     },
     "PrefixMutation": {
-      "operator": "string",
+      "operator": "name",
+      "rhs": "Expression"
+    },
+    "UnaryOperator": {
+      "operator": "name",
       "rhs": "Expression"
     },
     "BinaryOperator": {
-      "operator": "string",
+      "operator": "name",
       "lhs": "Expression",
       "rhs": "Expression"
     },
     "AssignmentOperator": {
-      "operator": "string",
+      "operator": "name",
       "lhs": "Expression",
       "rhs": "Expression"
     },

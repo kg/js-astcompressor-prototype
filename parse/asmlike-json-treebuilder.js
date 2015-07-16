@@ -17,6 +17,9 @@
   function AsmlikeJsonTreeBuilder () {
     JsonTreeBuilder.call(this);
 
+    this.operatorTable = Object.create(null);
+    this.operatorCount = 0;
+
     this.scopeChain = [
       Object.create(null)
     ];
@@ -53,6 +56,17 @@
     baseClass.popScope.call(this);
   };
 
+  // Special-case for operator names
+  AsmlikeJsonTreeBuilder.prototype.internOperator = function (operator) {
+    var index = this.operatorTable[operator];
+
+    if (typeof (index) !== "number") {
+      index = this.operatorTable[operator] = (this.operatorCount++) | 0;
+    }
+
+    return index;
+  };
+
   // FIXME: Externally visible names should have their names stored in a table somewhere
   //  in order to accurately capture the cost of those names
   AsmlikeJsonTreeBuilder.prototype.internName = function (name, externallyVisible) {
@@ -79,6 +93,8 @@
       result.expression = rhs;
       return this.finalize(result);
     } else {
+      operator = this.internOperator(operator);
+      
       return baseClass.makeUnaryOperatorExpression.call(this, operator, rhs);
     }
   };
@@ -105,8 +121,28 @@
       var isSigned = (operator === "|");
       return this.makeTruncation(isSigned, lhs);
     } else {
+      operator = this.internOperator(operator);
+
       return baseClass.makeBinaryOperatorExpression.call(this, operator, lhs, rhs);
     }
+  };
+
+  AsmlikeJsonTreeBuilder.prototype.makePrefixMutationExpression = function (operator, rhs) {
+    operator = this.internOperator(operator);
+
+    return baseClass.makePrefixMutationExpression.call(this, operator, rhs);
+  };
+
+  AsmlikeJsonTreeBuilder.prototype.makePostfixMutationExpression = function (operator, lhs) {
+    operator = this.internOperator(operator);
+
+    return baseClass.makePostfixMutationExpression.call(this, operator, lhs);
+  };
+
+  AsmlikeJsonTreeBuilder.prototype.makeAssignmentOperatorExpression = function (operator, lhs, rhs) {
+    operator = this.internOperator(operator);
+    
+    return baseClass.makeAssignmentOperatorExpression.call(this, operator, lhs, rhs);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeExpressionStatement = function (expression) {
