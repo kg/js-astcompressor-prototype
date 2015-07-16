@@ -278,7 +278,13 @@
   };
 
 
-  function readObjectReference (reader, module, tag) {
+  function readInliningFlag (reader, module) {
+    var flag = module.inliningStream.readByte();
+    return flag;
+  };
+
+
+  function deserializeObjectReference (reader, module, tag) {
     var isUntypedObject = (tag === "object");
     if (!isUntypedObject) {
       var shape = module.shapes.get(tag);
@@ -298,9 +304,8 @@
     var index;
 
     if (shouldConditionalInline) {
-      var inlinedFlag = 0, inlinedTypeTag = null;
-
-      inlinedFlag = module.inliningStream.readByte();
+      var inlinedTypeTag = null;
+      var inlinedFlag = readInliningFlag(reader, module);
 
       if (TraceInlining)
         console.log("INLINED=" + inlinedFlag + " " + tag);
@@ -390,7 +395,7 @@
 
       default:
       case "object":
-        return readObjectReference(reader, module, tag);
+        return deserializeObjectReference(reader, module, tag);
     }
 
     throw new Error("unexpected");

@@ -398,6 +398,11 @@
   };
 
 
+  JsAstModule.prototype.writeInliningFlag = function (flag) {
+    this.inliningWriter.writeByte(flag);
+  };
+
+
   JsAstModule.prototype.serializeFieldValue = function (writer, shape, field, value, overrideWriter) {
     // FIXME: Hack together field definition type -> tag conversion
     var tag = common.pickTagForField(field, this._getTableForTypeTag);
@@ -432,7 +437,7 @@
   };
 
 
-  JsAstModule.prototype.serializeObject = function (writer, node, canBeInlined, isInline) {
+  JsAstModule.prototype.serializeObjectContents = function (writer, node, canBeInlined, isInline) {
     if (Array.isArray(node))
       throw new Error("Should have serialized inline array");
 
@@ -444,6 +449,8 @@
 
     var shouldOverride = false;
     if (isInline) {
+      this.writeInliningFlag(1);
+
       var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
       if (trace)
         console.log("Inlined", shape.name, shape.tagIndex.toString(16));
@@ -640,7 +647,7 @@
           console.log("INLINED=2 " + tag);
 
         this.inlinedObjects += 1;
-        this.inliningWriter.writeByte(2);
+        this.writeInliningFlag(2);
       } else {
         this.notInlinedObjects += 1;
         writer.writeIndex(0xFFFFFFFF);
@@ -680,8 +687,6 @@
           if (TraceInlining)
             console.log("INLINED=1 " + tag);
 
-          this.inliningWriter.writeByte(1);
-
           var name = id.get_name();
           var shape = this.getShapeForObject(value);
           if (shape) {
@@ -691,7 +696,7 @@
               IoTrace = false;
 
             this.inlinedObjects += 1;
-            this.serializeObject(writer, value, true, true);
+            this.serializeObjectContents(writer, value, true, true);
             IoTrace = prior;
 
             return;
@@ -704,7 +709,7 @@
 
           this.notInlinedObjects += 1;
 
-          this.inliningWriter.writeByte(0);
+          this.writeInliningFlag(0);
         }
       }
 
@@ -934,7 +939,7 @@
       module.createValueStreams(writer);
 
     var objectWriter = new ValueWriter(module.configuration, "object table", writer);
-    module.serializeTable(objectWriter, module.objects, true,  module.serializeObject);
+    module.serializeTable(objectWriter, module.objects, true,  module.serializeObjectContents);
 
 
     var rootWriter = new ValueWriter(module.configuration, "root node", writer);
