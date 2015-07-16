@@ -310,7 +310,7 @@
       if (TraceInlining)
         console.log("INLINED=" + inlinedFlag + " " + tag);
 
-      if (inlinedFlag === 2) {
+      if (inlinedFlag === 0xFF) {
         return null;
 
       } else if (inlinedFlag === 1) {

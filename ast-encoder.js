@@ -387,7 +387,7 @@
   };
 
 
-  JsAstModule.prototype.writeTypeTag = function (defaultWriter, tag, canBeInlined, isInline) {
+  JsAstModule.prototype.writeTypeTag = function (defaultWriter, tag) {
     var writer = defaultWriter;
     if (this.configuration.TypeTagStream)
       writer = this.typeTagWriter;
@@ -400,6 +400,18 @@
 
   JsAstModule.prototype.writeInliningFlag = function (flag) {
     this.inliningWriter.writeByte(flag);
+  };
+
+
+  JsAstModule.prototype.writeInliningFlagAndIndex = function (writer, flag, index) {
+    this.writeInliningFlag(flag);
+    writer.writeIndex(index);
+  };
+
+
+  JsAstModule.prototype.writeInliningFlagAndTypeTag = function (writer, flag, typeTag) {
+    this.writeInliningFlag(flag);
+    this.writeTypeTag(writer, typeTag);
   };
 
 
@@ -445,11 +457,9 @@
     if (shape.tagIndex === null)
       throw new Error("Tag table not finalized");
 
-    this.writeTypeTag(writer, shape.tagIndex, canBeInlined, isInline);
-
     var shouldOverride = false;
     if (isInline) {
-      this.writeInliningFlag(1);
+      this.writeInliningFlagAndTypeTag(writer, 1, shape.tagIndex);
 
       var trace = TraceInlining || (TraceInlinedTypeCount-- > 0);
       if (trace)
@@ -465,6 +475,9 @@
         if (trace)
           console.log("Inlining " + shape.name + " to " + writer.description);
       }
+    } else {
+
+      this.writeTypeTag(writer, shape.tagIndex);
     }
 
     var self = this, fields = shape.shape.fields;
@@ -647,7 +660,7 @@
           console.log("INLINED=2 " + tag);
 
         this.inlinedObjects += 1;
-        this.writeInliningFlag(2);
+        this.writeInliningFlag(0xFF);
       } else {
         this.notInlinedObjects += 1;
         writer.writeIndex(0xFFFFFFFF);
@@ -683,12 +696,14 @@
       }
 
       if (shouldConditionalInline) {
+
         if (id.is_omitted()) {
           if (TraceInlining)
             console.log("INLINED=1 " + tag);
 
           var name = id.get_name();
           var shape = this.getShapeForObject(value);
+
           if (shape) {
             // HACK
             var prior = IoTrace;
@@ -696,24 +711,29 @@
               IoTrace = false;
 
             this.inlinedObjects += 1;
+            // serializeObjectContents calls writeInliningFlag
             this.serializeObjectContents(writer, value, true, true);
             IoTrace = prior;
 
             return;
+
           } else {
             throw new Error("Object without shape was omitted");
           }
+
         } else {
           if (TraceInlining)
             console.log("INLINED=0 " + tag);
 
           this.notInlinedObjects += 1;
 
-          this.writeInliningFlag(0);
+          this.writeInliningFlagAndIndex(writer, 0, index);
         }
+
+      } else {
+        writer.writeIndex(index);
       }
 
-      writer.writeIndex(index);
     } catch (err) {
       console.log("Failed while writing '" + tag + "'", value);
       throw err;
