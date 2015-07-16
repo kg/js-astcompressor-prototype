@@ -241,9 +241,16 @@
     if (module.configuration.TypeTagStream)
       reader = module.typeTagStream;
 
-    var tagIndex = reader.readVarUint32();
+    var tagIndex = reader.readIndex();
     if (tagIndex === false)
       throw new Error("Truncated file");
+
+    if (false)
+      console.log(
+        "read type tag " + tagIndex +
+        " (" + module.tags[tagIndex] + ") " +
+        " as varuint from " + reader.description
+      );
 
     var tag = module.tags[tagIndex];
     if (typeof (tag) !== "string")
@@ -271,7 +278,7 @@
   };
 
 
-  function readObject (reader, module, tag) {
+  function readObjectReference (reader, module, tag) {
     var isUntypedObject = (tag === "object");
     if (!isUntypedObject) {
       var shape = module.shapes.get(tag);
@@ -293,22 +300,7 @@
     if (shouldConditionalInline) {
       var inlinedFlag = 0, inlinedTypeTag = null;
 
-      if (reader.configuration.PackedInliningFlags) {
-        index = reader.readIndex();
-        inlinedFlag = (index & 0x1);
-
-        if (index === 0xFFFFFFFF)
-          return null;
-        else
-          index >>= 1;
-
-        inlinedTypeTag = module.tags[index];
-        if (typeof (inlinedTypeTag) !== "string")
-          throw new Error("Read unknown type tag '" + index + "' from packed form");
-
-      } else {
-        inlinedFlag = module.inliningStream.readByte();
-      }
+      inlinedFlag = module.inliningStream.readByte();
 
       if (TraceInlining)
         console.log("INLINED=" + inlinedFlag + " " + tag);
@@ -319,11 +311,11 @@
       } else if (inlinedFlag === 1) {
         var result = new Object();
 
-        deserializeObjectContents(reader, module, result, true, inlinedTypeTag);
+        deserializeObjectContents(reader, module, result, true, true, inlinedTypeTag);
 
         return result;
 
-      } else if (!reader.configuration.PackedInliningFlags) {
+      } else if (true) {
         index = reader.readIndex();
 
       } else {
@@ -398,7 +390,7 @@
 
       default:
       case "object":
-        return readObject(reader, module, tag);
+        return readObjectReference(reader, module, tag);
     }
 
     throw new Error("unexpected");
@@ -450,17 +442,10 @@
   }
 
 
-  function deserializeObjectContents (reader, module, obj, isInline, inlineTypeTag) {
+  function deserializeObjectContents (reader, module, obj, canBeInlined, isInline, inlineTypeTag) {
     var shapeName;
 
-    if (isInline && module.configuration.PackedInliningFlags) {
-      shapeName = inlineTypeTag;
-    } else {
-      shapeName = readTypeTag(reader, module);
-    }
-
-    if (IoTrace)
-      console.log("// object body #" + index);
+    shapeName = readTypeTag(reader, module);
 
     var shouldOverride = false;
     if (isInline) {
@@ -489,7 +474,15 @@
     for (var i = 0, l = shape.fields.length; i < l; i++) {
       var fd = shape.fields[i];
 
-      var value = deserializeFieldValue(reader, module, shape, fd, shouldOverride);
+      try {
+        var value = deserializeFieldValue(reader, module, shape, fd, shouldOverride);
+      } catch (e) {
+        console.log(
+          "Failed while reading field " + fd.name + 
+          " of an " + shapeName
+        );
+        throw e;
+      }
 
       obj[fd.name] = value;
       if (IoTrace)
@@ -529,7 +522,7 @@
 
     for (var i = 0; i < count; i++) {
       var obj = table[i];
-      deserializeObjectContents(reader, module, obj, false);
+      deserializeObjectContents(reader, module, obj, false, false);
     }
   };
 
@@ -598,13 +591,15 @@
 
     allocateObjectTable(result, objectCount);
 
+
     var objectReader = reader.readSubstream();
+
     deserializeObjectTable(objectReader, result);
 
 
     var rootReader = reader.readSubstream();
 
-    result.root = deserializeValueWithKnownTag(rootReader, result, "any", null);
+    result.root = deserializeValueWithKnownTag(rootReader, result, "any");
     if (!result.root)
       throw new Error("Failed to retrieve root from module");
 

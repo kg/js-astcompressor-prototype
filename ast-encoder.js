@@ -392,17 +392,7 @@
     if (this.configuration.TypeTagStream)
       writer = this.typeTagWriter;
 
-    if (canBeInlined && this.configuration.PackedInliningFlags) {
-      // This ensures that index encoding is used for both type tags and
-      //  object indices, so that we can consistently spot the inlining tag
-      tag <<= 1;
-      if (isInline)
-        tag |= 0x1;
-
-      writer.writeIndex(tag);
-    } else {
-      writer.writeVarUint32(tag);
-    }
+    writer.writeIndex(tag);
 
     this.typeTagsWritten += 1;
   };
@@ -442,7 +432,7 @@
   };
 
 
-  JsAstModule.prototype.serializeObject = function (writer, node, index, isInline) {
+  JsAstModule.prototype.serializeObject = function (writer, node, canBeInlined, isInline) {
     if (Array.isArray(node))
       throw new Error("Should have serialized inline array");
 
@@ -450,10 +440,7 @@
     if (shape.tagIndex === null)
       throw new Error("Tag table not finalized");
 
-    if (IoTrace)
-      console.log("// object body #" + index);
-    
-    this.writeTypeTag(writer, shape.tagIndex, true, isInline);
+    this.writeTypeTag(writer, shape.tagIndex, canBeInlined, isInline);
 
     var shouldOverride = false;
     if (isInline) {
@@ -636,14 +623,18 @@
         break;
     }
 
+    this.serializeObjectReference(writer, value, tag);
+  }
+
+
+  JsAstModule.prototype.serializeObjectReference = function (writer, value, tag) {
     var shouldConditionalInline = 
       this.configuration.ConditionalInlining &&
       (tag !== "any");
 
     if (value === null) {
       if (
-        shouldConditionalInline &&
-        !this.configuration.PackedInliningFlags
+        shouldConditionalInline
       ) {
         if (TraceInlining)
           console.log("INLINED=2 " + tag);
@@ -689,8 +680,7 @@
           if (TraceInlining)
             console.log("INLINED=1 " + tag);
 
-          if (!this.configuration.PackedInliningFlags)
-            this.inliningWriter.writeByte(1);
+          this.inliningWriter.writeByte(1);
 
           var name = id.get_name();
           var shape = this.getShapeForObject(value);
@@ -701,7 +691,7 @@
               IoTrace = false;
 
             this.inlinedObjects += 1;
-            this.serializeObject(writer, value, index || null, true);
+            this.serializeObject(writer, value, true, true);
             IoTrace = prior;
 
             return;
@@ -714,21 +704,16 @@
 
           this.notInlinedObjects += 1;
 
-          if (!this.configuration.PackedInliningFlags)
-            this.inliningWriter.writeByte(0);
+          this.inliningWriter.writeByte(0);
         }
       }
-
-      // Shift the index over by one bit to make room for the inline flag
-      if (this.configuration.PackedInliningFlags)
-        index <<= 1;
 
       writer.writeIndex(index);
     } catch (err) {
       console.log("Failed while writing '" + tag + "'", value);
       throw err;
     }
-  }
+  };
 
 
   JsAstModule.prototype.serializeTable = function (writer, table, ordered, serializeEntry) {
@@ -741,7 +726,7 @@
       var value = id.get_value();
 
       // gross
-      serializeEntry.call(this, writer, value, i);
+      serializeEntry.call(this, writer, value);
     }
   };
 
@@ -953,7 +938,7 @@
 
 
     var rootWriter = new ValueWriter(module.configuration, "root node", writer);
-    module.serializeValueWithKnownTag(rootWriter, module.root, "any", null);
+    module.serializeValueWithKnownTag(rootWriter, module.root, "any");
 
 
     writer.writeSubstream(tagWriter);

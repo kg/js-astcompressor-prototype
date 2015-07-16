@@ -19,5 +19,5 @@
   "ThreeByteIndices": false,
   "NullTerminatedStrings": true,
   "InternedNames": true,
-  "PackedInliningFlags": true
+  "PackedInliningFlags": false
 }
