@@ -58,8 +58,8 @@ var outputModule = astBuilder.finish(inputAst);
 
 if (configuration.DeduplicateObjects) {
   console.log(
-    "Early-deduplicated " + astBuilder.nodesPruned + 
-    " node(s) (" + 
+    astBuilder.nodesPruned + "/" + astBuilder.nodesFinalized + 
+    " parse nodes deduplicated (" + 
     (astBuilder.nodesPruned / astBuilder.nodesFinalized * 100)
       .toFixed(1) + "%)"
   );

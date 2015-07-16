@@ -291,6 +291,8 @@
 
     this.anyTypeValuesWritten = 0;
     this.typeTagsWritten = 0;
+    this.inlinedObjects = 0;
+    this.notInlinedObjects = 0;
 
     this._getTableForTypeTag = this.getTableForTypeTag.bind(this);
   };
@@ -658,8 +660,10 @@
         if (TraceInlining)
           console.log("INLINED=2 " + tag);
 
+        this.inlinedObjects += 1;
         this.inliningWriter.writeByte(2);
       } else {
+        this.notInlinedObjects += 1;
         writer.writeIndex(0xFFFFFFFF);
       }
       return;
@@ -707,6 +711,7 @@
             if (TraceInlining || (TraceInlinedTypeCount > 0))
               IoTrace = false;
 
+            this.inlinedObjects += 1;
             this.serializeObject(writer, value, index || null, true);
             IoTrace = prior;
 
@@ -718,6 +723,7 @@
           if (TraceInlining)
             console.log("INLINED=0 " + tag);
 
+          this.notInlinedObjects += 1;
           this.inliningWriter.writeByte(0);
         }
       }
@@ -986,8 +992,22 @@
     writer.writeSubstream(objectWriter);
     writer.writeSubstream(rootWriter);
 
-    if (omitCount > 0)
-      console.log("objects written inline:", omitCount, "(" + (omitCount * 100 / totalCount).toFixed(1) + "%)");
+    if (module.configuration.ConditionalInlining) {
+      var total = module.notInlinedObjects + module.inlinedObjects;
+
+      console.log(
+        module.inlinedObjects + "/" +
+        total + " object references written inline (" +
+        (module.inlinedObjects * 100 / total).toFixed(1) + "%)"
+      );
+    }
+
+    if (omitCount > 0) {
+      console.log(
+        omitCount + "/" + totalCount +
+        " objects omitted from object table (" + (omitCount * 100 / totalCount).toFixed(1) + "%)"
+      );
+    }
 
     if (module.configuration.TypeTagStream)
       console.log("type tags written:", module.typeTagsWritten);
