@@ -37,9 +37,18 @@
     return result;
   };
 
+  JsonTreeBuilder.prototype.pushScope = function () {
+  };
+
+  JsonTreeBuilder.prototype.popScope = function () {
+  };
+
   JsonTreeBuilder.prototype._makeBlock = function (typeTag) {
+    this.pushScope();
+
     var result = this.make(typeTag);
     result.statements = [];
+
     return result;
   };
 
@@ -49,6 +58,8 @@
 
   // You must call this after you finish appending stuff to a block
   JsonTreeBuilder.prototype.finishBlock = function (block) {
+    this.popScope();
+
     return this.finalize(block);
   };
 

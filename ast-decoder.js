@@ -195,8 +195,10 @@
 
     } else {
       // HACK So we can encode null distinct from ""
-      if (this.peekByte() === 0xFF)
+      if (this.peekByte() === 0xFF) {
+        this.readByte();
         return null;
+      }
 
       var b;
 
