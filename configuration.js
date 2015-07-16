@@ -71,7 +71,10 @@
     this.ThreeByteIndices            = false;
 
     // Null-terminated strings instead of length headers
-    this.NullTerminatedStrings       = false;    
+    this.NullTerminatedStrings       = false;
+
+    // Maintains a scope chain and replaces names with numbered per-scope indices
+    this.InternedNames               = true;
   };
 
   exports.FromDictionary = function (dict) {

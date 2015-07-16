@@ -317,8 +317,7 @@
 
     var shouldConditionalInline = 
       reader.configuration.ConditionalInlining &&
-      (tag !== "any") &&
-      (tag !== "string");
+      (tag !== "any");
 
     if (shouldConditionalInline) {
       var inlinedFlag = module.inliningStream.readByte();
@@ -350,6 +349,18 @@
           console.log(reader.description + " read  any ->");
         return deserializeValueWithKnownTag(reader, module, tag, baseIndex);
       }
+
+      case "name":
+        if (IoTrace)
+          console.log(reader.description + " read  name");
+        
+        if (module.configuration.InternedNames) {
+          var index = reader.readIndex();
+          return index;
+        } else {
+          var string = reader.readUtf8String();
+          return string;
+        }
 
       case "string":
         if (IoTrace)

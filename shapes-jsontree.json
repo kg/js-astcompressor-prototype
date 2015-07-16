@@ -3,14 +3,14 @@
   "shapes": {
     "MemberAccess": {
       "lhs": "Expression",
-      "memberName": "string"
+      "memberName": "name"
     },
     "ComputedMemberAccess": {
       "lhs": "Expression",
       "rhs": "Expression"
     },
     "Identifier": {
-      "identifier": "string"
+      "identifier": "name"
     },
     "RegExpLiteral": {
       "pattern": "string",
@@ -52,10 +52,10 @@
       "expression": "Expression"
     },
     "BreakStatement": {
-      "label": "string?"
+      "label": "name?"
     },
     "ContinueStatement": {
-      "label": "string?"
+      "label": "name?"
     },
     "ReturnStatement": {
       "expression": "Expression?"
@@ -67,7 +67,7 @@
       "expressions": ["Expression"]
     },
     "LabelStatement": {
-      "labels": ["string"],
+      "labels": ["name"],
       "labelled": "Statement | Expression"
     },
     "ForStatement": {
@@ -91,7 +91,7 @@
       "finallyBlock": "Block? | Statement?"
     },
     "ForInDeclaration": {
-      "variableName": "string",
+      "variableName": "name",
       "sequenceExpression": "Expression"
     },
     "ForInStatement": {
@@ -133,7 +133,7 @@
       "declarations": ["Declaration"]
     },
     "Declaration": {
-      "name": "string",
+      "name": "name",
       "initialValue": "Expression?"
     },
     "Invocation": {
@@ -149,8 +149,8 @@
       "falseStatement": "Block? | Statement?"
     },
     "Function": {
-      "name": "string?",
-      "argumentNames": ["string"],
+      "name": "name?",
+      "argumentNames": ["name"],
       "body": "Block"
     },
     "TopLevel": {

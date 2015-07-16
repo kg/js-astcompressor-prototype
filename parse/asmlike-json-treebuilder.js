@@ -22,6 +22,7 @@
     ];
 
     this.scopeChain[0].$$count = 0;
+    this.internNames = false;
   };
 
   AsmlikeJsonTreeBuilder.prototype = Object.create(JsonTreeBuilder.prototype);
@@ -52,9 +53,14 @@
     baseClass.popScope.call(this);
   };
 
-  AsmlikeJsonTreeBuilder.prototype.internName = function (name) {
+  // FIXME: Externally visible names should have their names stored in a table somewhere
+  //  in order to accurately capture the cost of those names
+  AsmlikeJsonTreeBuilder.prototype.internName = function (name, externallyVisible) {
+    if (!this.internNames)
+      return name;
+
     if (name === null)
-      return null;
+      return 0xFFFFFFFF;
 
     var currentScope = this.scopeChain[this.scopeChain.length - 1];
     var index = currentScope[name];
@@ -64,7 +70,7 @@
     }
 
     // HACK: The shape table lists string for these...
-    return "#" + index;
+    return index;
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeUnaryOperatorExpression = function (operator, rhs) {
@@ -119,60 +125,64 @@
     labels = Array.prototype.slice.call(labels);
 
     for (var i = 0; i < labels.length; i++)
-      labels[i] = this.internName(labels[i]);
+      labels[i] = this.internName(labels[i], false);
 
     return baseClass.makeLabelStatement.call(this, labels, labelled);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeDeclaration = function (name, initialValue) {
-    name = this.internName(name);
+    name = this.internName(name, false);
 
     return baseClass.makeDeclaration.call(this, name, initialValue);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeForInDeclaration = function (variableName, sequenceExpression) {
-    variableName = this.internName(variableName);
+    variableName = this.internName(variableName, false);
 
     return baseClass.makeForInDeclaration.call(this, variableName, sequenceExpression);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeBreakStatement = function (label) {
-    label = this.internName(label);
+    label = this.internName(label, false);
 
     return baseClass.makeBreakStatement.call(this, label);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeContinueStatement = function (label) {
-    label = this.internName(label);
+    label = this.internName(label, false);
 
     return baseClass.makeContinueStatement.call(this, label);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
-    name = this.internName(name);
+    // FIXME: The name should be interned in the outer scope
+    name = this.internName(name, false);
     argumentNames = Array.prototype.slice.call(argumentNames);
 
     for (var i = 0; i < argumentNames.length; i++)
-      argumentNames[i] = this.internName(argumentNames[i]);
+      argumentNames[i] = this.internName(argumentNames[i], false);
 
     return baseClass.makeFunctionExpression.call(this, name, argumentNames, body);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makePair = function (key, value) {
+    // FIXME: Identifier vs string literal
+    /*
     if (typeof (key) === "string")
-      key = this.internName(key);
+      key = this.internName(key, true);
+    */
 
     return baseClass.makePair.call(this, key, value);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeIdentifierExpression = function (identifier) {
-    identifier = this.internName(identifier);
+    identifier = this.internName(identifier, false);
 
     return baseClass.makeIdentifierExpression.call(this, identifier);
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeMemberAccessExpression = function (lhs, memberName) {
-    memberName = this.internName(memberName);
+    memberName = this.internName(memberName, true);
 
     return baseClass.makeMemberAccessExpression.call(this, lhs, memberName);
   };

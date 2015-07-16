@@ -184,6 +184,9 @@
   };
 
   ValueWriter.prototype.writeIndex = function (value) {
+    if (typeof (value) !== "number")
+      throw new Error("writeIndex expected number");
+
     if (value === 0xFFFFFFFF)
       this.writeVarUint32(0);
     else
@@ -208,6 +211,9 @@
 
       return;
     }
+
+    if (typeof (text) !== "string")
+      throw new Error("writeUtf8String expected string");
 
     var lengthBytes = 0;
     var counter = {
@@ -273,6 +279,7 @@
     this.tags.add("object");
     this.tags.add("boolean");
     this.tags.add("string");
+    this.tags.add("name");
     this.tags.add("integer");
     this.tags.add("number");
 
@@ -503,6 +510,8 @@
     if (value === null)
       return "null";
 
+    // FIXME: names?
+
     switch (jsType) {
       case "string":
         return "string";
@@ -515,7 +524,7 @@
         if (i === value)
           return "integer";
         else
-          return "double";
+          return "double";      
 
       case "object":
         if (Array.isArray(value)) {
@@ -541,7 +550,7 @@
     if (actualValueTag === "null")
       return null;
 
-    if (tag === "string")
+    if ((tag === "string") || (tag === "name"))
       return null;
     else {
       var shape = this.shapes.get(tag);
@@ -582,6 +591,15 @@
         writer.writeUtf8String(value);
         return;
 
+      case "name":
+        if (this.configuration.InternedNames) {
+          writer.writeIndex(value);
+        } else {
+          writer.writeUtf8String(value);
+        }
+
+        return;
+
       case "any": {
         if (IoTrace)
           console.log(writer.description + " write any ->");
@@ -614,9 +632,14 @@
         if (IoTrace)
           console.log("  Writing array of type " + elementTag + " with " + value.length + " item(s) to " + writer.description);
 
-        for (var i = 0; i < value.length; i++) {
-          var element = value[i];
-          this.serializeValueWithKnownTag(writer, element, elementTag, baseIndex);
+        try {
+          for (var i = 0; i < value.length; i++) {
+            var element = value[i];
+            this.serializeValueWithKnownTag(writer, element, elementTag, baseIndex);
+          }
+        } catch (e) {
+          console.log("Failed while writing array with tag", elementTag);
+          throw e;
         }
 
         return;
@@ -628,8 +651,7 @@
 
     var shouldConditionalInline = 
       this.configuration.ConditionalInlining &&
-      (tag !== "any") &&
-      (tag !== "string");
+      (tag !== "any");
 
     if (value === null) {
       if (shouldConditionalInline) {
@@ -661,8 +683,14 @@
     }
 
     try {
-      var id = table.get_id(value);
-      var index = id.get_index();
+      var id, index;
+      try {
+        id = table.get_id(value);
+        index = id.get_index();
+      } catch (e) {
+        console.log("Failed to get id for value", value, "with tag", actualValueTag, "(expected", tag, ") from table", table.semantic);
+        throw e;
+      }
 
       if (shouldConditionalInline) {
         if (id.is_omitted()) {
@@ -741,6 +769,8 @@
 
     this.result = new JsAstModule(configuration, shapes);
 
+    this.internNames = configuration.InternedNames;
+
     this.walkedCount = 0;
     this.progressInterval = 20000;
   };
@@ -773,7 +803,12 @@
 
       // HACK: We know that we don't have primitives mixed in
       //  with objects in arrays, so we can cheat here.
-      if ((tag !== "string") && !Array.isArray(item)) {
+      if (
+        (tag !== "string") && 
+        (tag !== "integer") && 
+        (tag !== "double") && 
+        !Array.isArray(item)
+      ) {
         // console.log(tag, "-> object");
         tag = "object";
       }
