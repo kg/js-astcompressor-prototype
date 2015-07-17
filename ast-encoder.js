@@ -259,10 +259,11 @@
     this.tags.add("number");
 
     this.objects = new ObjectTable("object");
-
     this.valueStreams = Object.create(null);
-    this.inliningWriter = null;
-    this.typeTagWriter = null;
+
+    this.inliningWriter    = null;
+    this.typeTagWriter     = null;
+    this.packedIndexWriter = null;
 
     this.anyTypeValuesWritten = 0;
     this.typeTagsWritten = 0;
@@ -404,6 +405,9 @@
 
 
   JsAstModule.prototype._writePackedIndex = function (writer, flag, index) {
+    if (this.configuration.PackedIndexStream)
+      writer = this.packedIndexWriter;
+
     if ((flag === 0xFF) || (index === 0xFFFFFFFF)) {
       // console.log("packed", flag, index, "-> FFFFFFFF");
       // LEB 0xFFFFFFFF == 0
@@ -988,6 +992,12 @@
     if (module.configuration.TypeTagStream)
       module.typeTagWriter = new ValueWriter(module.configuration, "type tags", writer);
 
+    if (
+      module.configuration.PackedInliningFlags && 
+      module.configuration.PackedIndexStream
+    )
+      module.packedIndexWriter = new ValueWriter(module.configuration, "packed indices", writer);
+
     if (module.configuration.ValueStreamPerType)
       module.createValueStreams(writer);
 
@@ -1007,6 +1017,9 @@
 
     if (module.typeTagWriter)
       writer.writeSubstream(module.typeTagWriter);
+
+    if (module.packedIndexWriter)
+      writer.writeSubstream(module.packedIndexWriter);
 
 
     if (module.configuration.ValueStreamPerType)

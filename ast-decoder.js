@@ -225,13 +225,13 @@
     this.configuration = configuration;
     this.shapes        = shapes;
 
+    this.tags         = null;
+    this.objects      = null;
     this.valueStreams = Object.create(null);
-    this.typeTagStream = null;
-    this.inliningStream = null;
 
-    this.tags    = null;
-
-    this.objects = null;
+    this.typeTagStream     = null;
+    this.inliningStream    = null;
+    this.packedIndexStream = null;
 
     this.root = null;
   };
@@ -298,6 +298,9 @@
 
   function readInliningBundle (reader, module) {
     if (module.configuration.PackedInliningFlags) {
+      if (module.configuration.PackedIndexStream)
+        reader = module.packedIndexStream;
+
       var packedIndex = reader.readIndex();
 
       if (packedIndex === 0xFFFFFFFF) {
@@ -640,6 +643,12 @@
 
     if (configuration.TypeTagStream)
       result.typeTagStream = reader.readSubstream();
+
+    if (
+      configuration.PackedInliningFlags && 
+      configuration.PackedIndexStream
+    )
+      result.packedIndexStream = reader.readSubstream();
 
 
     if (configuration.ValueStreamPerType)

@@ -75,6 +75,10 @@
     // Packs the inlining flag into index values instead of writing it separately
     // This makes object references larger on average, but eliminates inline flags
     this.PackedInliningFlags         = false;
+
+    // When packed inlining is enables, moves packed indices out of individual streams
+    //  into a single stream
+    this.PackedIndexStream           = false;
   };
 
   exports.FromDictionary = function (dict) {
