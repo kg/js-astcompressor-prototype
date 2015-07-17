@@ -399,15 +399,14 @@
 
 
   JsAstModule.prototype.writeInliningFlag = function (flag) {
-    // HACK: This is valid even in packed mode because the index representation of null
-    //  is 0xFFFFFFFF and the inlining flag representation is 0xFF
     this.inliningWriter.writeByte(flag);
   };
 
 
   JsAstModule.prototype._writePackedIndex = function (writer, flag, index) {
-    if (flag === 0xFF) {
-      writer.writeByte(0xFF);
+    if ((flag === 0xFF) || (index === 0xFFFFFFFF)) {
+      // LEB 0xFFFFFFFF == 0
+      writer.writeIndex(0xFFFFFFFF);
       return;
     }
 

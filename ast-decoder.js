@@ -289,28 +289,52 @@
   };
 
 
+  var nullBundle = {
+    isInlined: true,
+    isNull:   true,
+    tag:      "null",
+    index:    0xFFFFFFFF
+  };
+
   function readInliningBundle (reader, module) {
-    var flag  = readInliningFlag(reader, module);
+    if (module.configuration.PackedInliningFlags) {
+      var packedIndex = reader.readIndex();
 
-    if (flag === 0xFF) {
-      return {
-        isInlined: true,
-        isNull:   true,
-        tag:      "null",
-        index:    0xFFFFFFFF
-      }
-    }
+      if (packedIndex === 0xFFFFFFFF)
+        return nullBundle;
 
-    if (flag) {
-      return {
-        isInlined: true,
-        tag:       readTypeTag(reader, module)
+      var flag = packedIndex & 0x1;
+      packedIndex >>= 1;
+
+      if (flag) {
+        return {
+          isInlined: true,
+          tag:       _decodeTypeTag(module, packedIndex)
+        };
+      } else {
+        return {
+          isInlined: false,
+          index:     packedIndex
+        }
       }
+      
     } else {
-      var index = reader.readIndex();
-      return {
-        isInlined: false,
-        index:    index
+      var flag  = readInliningFlag(reader, module);
+
+      if (flag === 0xFF)
+        return nullBundle;
+
+      if (flag) {
+        return {
+          isInlined: true,
+          tag:       readTypeTag(reader, module)
+        }
+      } else {
+        var index = reader.readIndex();
+        return {
+          isInlined: false,
+          index:    index
+        }
       }
     }
   };
