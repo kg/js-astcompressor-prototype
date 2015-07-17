@@ -20,5 +20,5 @@
   "NullTerminatedStrings": true,
   "InternedSymbols": true,
   "PackedInliningFlags": true,
-  "PackedIndexStream": true
+  "PackedIndexStream": false
 }

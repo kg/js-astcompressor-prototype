@@ -439,6 +439,7 @@
   JsAstModule.prototype.writeInliningFlagAndTypeTag = function (writer, flag, typeTag) {
     if (this.configuration.PackedInliningFlags) {
       this._writePackedIndex(writer, flag, typeTag);
+      this.typeTagsWritten += 1;
     } else {
       this._writeInliningFlag(flag);
       if (flag === 0xFF)
@@ -593,6 +594,40 @@
   };
 
 
+  JsAstModule.prototype.serializeArray = function (writer, value) {
+    writer.writeVarUint32(value.length);
+    if (value.length === 0) {
+      if (IoTrace)
+        console.log("  Wrote empty array to " + writer.description);
+      return;
+    }
+
+    // The tree-walker figured out whether we need to use 'any' earlier
+    var elementTag = this.arrayTypeTags.get(value);
+    var elementTagIndex = this.getIndexForTypeTag(elementTag);
+    this.writeTypeTag(writer, elementTagIndex, false);
+
+    if (IoTrace)
+      console.log("  Writing array of type " + elementTag + " with " + value.length + " item(s) to " + writer.description);
+
+    var elementsInlined = 0;
+    try {
+      for (var i = 0; i < value.length; i++) {
+        var element = value[i];
+        var wasInlined = this.serializeValueWithKnownTag(writer, element, elementTag);
+        if (wasInlined)
+          elementsInlined += 1;
+      }
+    } catch (e) {
+      console.log("Failed while writing array with tag", elementTag);
+      throw e;
+    }
+
+    if (false)
+      console.log(elementsInlined + "/" + value.length + " element(s) of tag " + elementTag + " inlined");
+  };
+
+
   // Or unknown tag, if you pass 'any', because why not.
   JsAstModule.prototype.serializeValueWithKnownTag = function (writer, value, tag) {
     switch (tag) {
@@ -600,24 +635,24 @@
       case "false":
       case "null":
         // no-op. value is encoded by the type tag.
-        return;
+        return true;
 
       case "boolean":
         writer.writeByte(value ? 1 : 0);
-        return;
+        return true;
 
       case "integer":
         // TODO: varint?
         writer.writeInt32(value);
-        return;
+        return true;
 
       case "double":
         writer.writeFloat64(value);
-        return;
+        return true;
 
       case "string":
         writer.writeUtf8String(value);
-        return;
+        return true;
 
       case "symbol":
         if (this.configuration.InternedSymbols) {
@@ -626,7 +661,7 @@
           writer.writeUtf8String(value);
         }
 
-        return;
+        return true;
 
       case "any": {
         if (IoTrace)
@@ -645,42 +680,19 @@
       }
 
       case "array":
-        writer.writeVarUint32(value.length);
-        if (value.length === 0) {
-          if (IoTrace)
-            console.log("  Wrote empty array to " + writer.description);
-          return;
-        }
-
-        // The tree-walker figured out whether we need to use 'any' earlier
-        var elementTag = this.arrayTypeTags.get(value);
-        var elementTagIndex = this.getIndexForTypeTag(elementTag);
-        this.writeTypeTag(writer, elementTagIndex, false);
-
-        if (IoTrace)
-          console.log("  Writing array of type " + elementTag + " with " + value.length + " item(s) to " + writer.description);
-
-        try {
-          for (var i = 0; i < value.length; i++) {
-            var element = value[i];
-            this.serializeValueWithKnownTag(writer, element, elementTag);
-          }
-        } catch (e) {
-          console.log("Failed while writing array with tag", elementTag);
-          throw e;
-        }
-
-        return;
+        this.serializeArray(writer, value);
+        return true;
 
       case "object":
       default:
         break;
     }
 
-    this.serializeObjectReference(writer, value, tag);
+    return this.serializeObjectReference(writer, value, tag);
   }
 
 
+  // Returns true if the reference was inlined
   JsAstModule.prototype.serializeObjectReference = function (writer, value, tag) {
     var shouldConditionalInline = 
       this.configuration.ConditionalInlining &&
@@ -699,7 +711,8 @@
         this.notInlinedObjects += 1;
         writer.writeIndex(0xFFFFFFFF);
       }
-      return;
+
+      return true;
     }
 
     var actualValueTag = this.getTypeTagForValue(value);
@@ -749,7 +762,7 @@
             this.serializeObjectContents(writer, value, true, true);
             IoTrace = prior;
 
-            return;
+            return true;
 
           } else {
             throw new Error("Object without shape was omitted");
@@ -772,6 +785,8 @@
       console.log("Failed while writing '" + tag + "'", value);
       throw err;
     }
+
+    return false;
   };
 
 
@@ -1051,9 +1066,27 @@
     }
 
     if (module.configuration.TypeTagStream)
-      console.log("type tags written:", module.typeTagsWritten);
+      console.log((module.typeTagsWritten / 1000).toFixed(2) + "k type tags written");
 
-    console.log("varint sizes:", writer.varintSizes);
+    if (module.configuration.EnableVarints) {
+      var varintSizes = "";
+      var totalVarintSize = 0;
+      for (var i = 0; i < writer.varintSizes.length; i++) {
+        totalVarintSize += (i + 1) * writer.varintSizes[i];
+
+        if (writer.varintSizes[i]) {
+          if (varintSizes.length)
+            varintSizes += ", ";
+
+          varintSizes += (i + 1) + "b " + (writer.varintSizes[i] / 1000).toFixed(2) + "k";
+        }
+      }
+
+      console.log(
+        (totalVarintSize / 1024).toFixed(1) + "KiB varints written (" +
+        varintSizes + ")"
+      ); 
+    }
 
     return writer.toArray();
   };
