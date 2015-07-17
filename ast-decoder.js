@@ -300,24 +300,27 @@
     if (module.configuration.PackedInliningFlags) {
       var packedIndex = reader.readIndex();
 
-      if (packedIndex === 0xFFFFFFFF)
+      if (packedIndex === 0xFFFFFFFF) {
+        // console.log("unpacked FFFFFFFF -> null");
         return nullBundle;
+      }
 
       var flag = packedIndex & 0x1;
-      packedIndex >>= 1;
+      var index = packedIndex >> 1;
+      // console.log("unpacked", packedIndex.toString(16), "->", flag, index);
 
       if (flag) {
         return {
           isInlined: true,
-          tag:       _decodeTypeTag(module, packedIndex)
+          tag:       _decodeTypeTag(module, index)
         };
       } else {
         return {
           isInlined: false,
-          index:     packedIndex
+          index:     index
         }
       }
-      
+
     } else {
       var flag  = readInliningFlag(reader, module);
 
@@ -629,7 +632,10 @@
     result.tags = deserializeTable(tagReader, readUtf8String);
 
 
-    if (configuration.ConditionalInlining)
+    if (
+      configuration.ConditionalInlining &&
+      !configuration.PackedInliningFlags
+    )
       result.inliningStream = reader.readSubstream();
 
     if (configuration.TypeTagStream)

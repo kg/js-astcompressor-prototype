@@ -398,22 +398,24 @@
   };
 
 
-  JsAstModule.prototype.writeInliningFlag = function (flag) {
+  JsAstModule.prototype._writeInliningFlag = function (flag) {
     this.inliningWriter.writeByte(flag);
   };
 
 
   JsAstModule.prototype._writePackedIndex = function (writer, flag, index) {
     if ((flag === 0xFF) || (index === 0xFFFFFFFF)) {
+      // console.log("packed", flag, index, "-> FFFFFFFF");
       // LEB 0xFFFFFFFF == 0
       writer.writeIndex(0xFFFFFFFF);
       return;
     }
 
-    index <<= 1;
-    index |= (flag & 0x1);
+    var packed = index << 1;
+    packed |= (flag & 0x1);
 
-    writer.writeIndex(index);
+    // console.log("packed", flag, index, "->", packed.toString(16));
+    writer.writeIndex(packed);
   };
 
 
@@ -421,7 +423,7 @@
     if (this.configuration.PackedInliningFlags) {
       this._writePackedIndex(writer, flag, index);
     } else {
-      this.writeInliningFlag(flag);
+      this._writeInliningFlag(flag);
       if (flag === 0xFF)
         return;
 
@@ -434,7 +436,7 @@
     if (this.configuration.PackedInliningFlags) {
       this._writePackedIndex(writer, flag, typeTag);
     } else {
-      this.writeInliningFlag(flag);
+      this._writeInliningFlag(flag);
       if (flag === 0xFF)
         return;
 
@@ -685,10 +687,10 @@
         shouldConditionalInline
       ) {
         if (TraceInlining)
-          console.log("INLINED=2 " + tag);
+          console.log("INLINED=null " + tag);
 
         this.inlinedObjects += 1;
-        this.writeInliningFlag(0xFF);
+        this.writeInliningFlagAndIndex(writer, 0xFF, 0xFFFFFFFF);
       } else {
         this.notInlinedObjects += 1;
         writer.writeIndex(0xFFFFFFFF);
@@ -977,7 +979,10 @@
       _.writeUtf8String(value);
     });
 
-    if (module.configuration.ConditionalInlining)
+    if (
+      module.configuration.ConditionalInlining &&
+      !module.configuration.PackedInliningFlags
+    )
       module.inliningWriter = new ValueWriter(module.configuration, "inlining flags", writer);
 
     if (module.configuration.TypeTagStream)
@@ -997,10 +1002,10 @@
     writer.writeSubstream(tagWriter);
 
 
-    if (module.configuration.ConditionalInlining)
+    if (module.inliningWriter)
       writer.writeSubstream(module.inliningWriter);
 
-    if (module.configuration.TypeTagStream)
+    if (module.typeTagWriter)
       writer.writeSubstream(module.typeTagWriter);
 
 
