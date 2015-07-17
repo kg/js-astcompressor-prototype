@@ -74,7 +74,7 @@
 
     // Packs the inlining flag into index values instead of writing it separately
     // This makes object references larger on average, but eliminates inline flags
-    this.PackedInliningFlags         = true;
+    this.PackedInliningFlags         = false;
   };
 
   exports.FromDictionary = function (dict) {

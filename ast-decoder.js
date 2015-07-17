@@ -237,14 +237,7 @@
   };
 
 
-  function readTypeTag (reader, module) {
-    if (module.configuration.TypeTagStream)
-      reader = module.typeTagStream;
-
-    var tagIndex = reader.readIndex();
-    if (tagIndex === false)
-      throw new Error("Truncated file");
-
+  function _decodeTypeTag (module, tagIndex) {
     if (false)
       console.log(
         "read type tag " + tagIndex +
@@ -257,6 +250,18 @@
       throw new Error("Invalid tag index: " + tagIndex);
 
     return tag;
+  };
+
+
+  function readTypeTag (reader, module) {
+    if (module.configuration.TypeTagStream)
+      reader = module.typeTagStream;
+
+    var tagIndex = reader.readIndex();
+    if (tagIndex === false)
+      throw new Error("Truncated file");
+
+    return _decodeTypeTag(module, tagIndex);
   };
 
 
@@ -284,6 +289,33 @@
   };
 
 
+  function readInliningBundle (reader, module) {
+    var flag  = readInliningFlag(reader, module);
+
+    if (flag === 0xFF) {
+      return {
+        isInlined: true,
+        isNull:   true,
+        tag:      "null",
+        index:    0xFFFFFFFF
+      }
+    }
+
+    if (flag) {
+      return {
+        isInlined: true,
+        tag:       readTypeTag(reader, module)
+      }
+    } else {
+      var index = reader.readIndex();
+      return {
+        isInlined: false,
+        index:    index
+      }
+    }
+  };
+
+
   function deserializeObjectReference (reader, module, tag) {
     var isUntypedObject = (tag === "object");
     if (!isUntypedObject) {
@@ -304,27 +336,20 @@
     var index;
 
     if (shouldConditionalInline) {
-      var inlinedTypeTag = null;
-      var inlinedFlag = readInliningFlag(reader, module);
+      var bundle = readInliningBundle(reader, module);
 
-      if (TraceInlining)
-        console.log("INLINED=" + inlinedFlag + " " + tag);
-
-      if (inlinedFlag === 0xFF) {
+      if (bundle.isNull) {
         return null;
 
-      } else if (inlinedFlag === 1) {
+      } else if (bundle.isInlined) {
         var result = new Object();
 
-        deserializeObjectContents(reader, module, result, true, true, inlinedTypeTag);
+        deserializeObjectContents(reader, module, result, bundle.isInlined, bundle.tag);
 
         return result;
 
-      } else if (true) {
-        index = reader.readIndex();
-
       } else {
-        // Index already initialized above
+        index = bundle.index;
       }
 
     } else {
@@ -447,10 +472,13 @@
   }
 
 
-  function deserializeObjectContents (reader, module, obj, canBeInlined, isInline, inlineTypeTag) {
+  function deserializeObjectContents (reader, module, obj, isInline, inlinedTypeTag) {
     var shapeName;
 
-    shapeName = readTypeTag(reader, module);
+    if (typeof (inlinedTypeTag) === "string")
+      shapeName = inlinedTypeTag;
+    else
+      shapeName = readTypeTag(reader, module);
 
     var shouldOverride = false;
     if (isInline) {
@@ -527,7 +555,7 @@
 
     for (var i = 0; i < count; i++) {
       var obj = table[i];
-      deserializeObjectContents(reader, module, obj, false, false);
+      deserializeObjectContents(reader, module, obj, false);
     }
   };
 

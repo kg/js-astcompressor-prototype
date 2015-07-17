@@ -399,19 +399,48 @@
 
 
   JsAstModule.prototype.writeInliningFlag = function (flag) {
+    // HACK: This is valid even in packed mode because the index representation of null
+    //  is 0xFFFFFFFF and the inlining flag representation is 0xFF
     this.inliningWriter.writeByte(flag);
   };
 
 
-  JsAstModule.prototype.writeInliningFlagAndIndex = function (writer, flag, index) {
-    this.writeInliningFlag(flag);
+  JsAstModule.prototype._writePackedIndex = function (writer, flag, index) {
+    if (flag === 0xFF) {
+      writer.writeByte(0xFF);
+      return;
+    }
+
+    index <<= 1;
+    index |= (flag & 0x1);
+
     writer.writeIndex(index);
   };
 
 
+  JsAstModule.prototype.writeInliningFlagAndIndex = function (writer, flag, index) {
+    if (this.configuration.PackedInliningFlags) {
+      this._writePackedIndex(writer, flag, index);
+    } else {
+      this.writeInliningFlag(flag);
+      if (flag === 0xFF)
+        return;
+
+      writer.writeIndex(index);
+    }
+  };
+
+
   JsAstModule.prototype.writeInliningFlagAndTypeTag = function (writer, flag, typeTag) {
-    this.writeInliningFlag(flag);
-    this.writeTypeTag(writer, typeTag);
+    if (this.configuration.PackedInliningFlags) {
+      this._writePackedIndex(writer, flag, typeTag);
+    } else {
+      this.writeInliningFlag(flag);
+      if (flag === 0xFF)
+        return;
+
+      this.writeTypeTag(writer, typeTag);
+    }
   };
 
 
