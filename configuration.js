@@ -72,6 +72,9 @@
     // Maintains a scope chain and replaces symbols with numbered per-scope indices
     this.InternedSymbols             = false;
 
+    // Orders local symbols before global symbols in the index space.
+    this.LocalSymbolsBeforeGlobals   = false;
+
     // Packs the inlining flag into index values instead of writing it separately
     // This makes object references larger on average, but eliminates inline flags
     this.PackedInliningFlags         = false;

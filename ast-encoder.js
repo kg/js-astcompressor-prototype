@@ -830,6 +830,7 @@
     this.result = new JsAstModule(configuration, shapes);
 
     this.internSymbols = configuration.InternedSymbols;
+    this.localSymbolsBeforeGlobals = configuration.LocalSymbolsBeforeGlobals;
 
     this.walkedCount = 0;
     this.progressInterval = 20000;
@@ -960,6 +961,8 @@
     rootTable.add(root);
 
     this.result.root = root;
+    this.result.externalSymbolCount = this.externalSymbolCount;
+    this.result.maxLocalSymbolCount = this.maxLocalSymbolCount;
 
     return this.result;
   };
@@ -1097,6 +1100,13 @@
         (totalVarintSize / 1024).toFixed(1) + "KiB varints written (" +
         varintSizes + ")"
       ); 
+    }
+
+    if (module.configuration.InternedSymbols) {
+      console.log(
+        module.externalSymbolCount + " externally visible symbols, " +
+        module.maxLocalSymbolCount + " max local symbols"
+      );
     }
 
     return writer.toArray();

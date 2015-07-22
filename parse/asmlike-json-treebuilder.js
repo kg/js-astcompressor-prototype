@@ -32,6 +32,7 @@
       base = this.getBase() | 0;
 
     var result = base + this.id;
+
     return result;
   };
 
@@ -50,11 +51,25 @@
     ];
 
     this.scopeChain[0].$$count = 0;
+    this.maxLocalSymbolCount = 0;
+
     this.internSymbols = false;
+    this.localSymbolsBeforeGlobals = false;
 
     var self = this;
-    this.getSymbolBase = function getSymbolBase () { 
-      return self.externalSymbolCount; 
+
+    this.getLocalSymbolBase = function getLocalSymbolBase () {
+      if (self.localSymbolsBeforeGlobals)
+        return 0;
+      else
+        return self.externalSymbolCount;
+    };
+    
+    this.getGlobalSymbolBase = function getGlobalSymbolBase () {
+      if (self.localSymbolsBeforeGlobals)
+        return self.maxLocalSymbolCount;
+      else
+        return 0;
     };
   };
 
@@ -115,19 +130,20 @@
 
       if (typeof (index) === "undefined") {
         index = this.externalSymbols[name] =
-          new Symbol(name, null, (this.externalSymbolCount++) | 0);
+          new Symbol(name, this.getGlobalSymbolBase, (this.externalSymbolCount++) | 0);
       }
     } else {
       var currentScope = this.scopeChain[this.scopeChain.length - 1];
       var index = currentScope[name];
 
       if (typeof (index) === "undefined") {
+        var i = (currentScope.$$count++);
+        this.maxLocalSymbolCount = Math.max(i, this.maxLocalSymbolCount) | 0;
+
         index = currentScope[name] = 
-          new Symbol(name, this.getSymbolBase, (currentScope.$$count++) | 0);
+          new Symbol(name, this.getLocalSymbolBase, i | 0);
       }
     }
-
-    // console.log("symbol " + name + " = ", index);
 
     // HACK: The shape table lists string for these...
     return index;
@@ -238,7 +254,7 @@
 
   AsmlikeJsonTreeBuilder.prototype.makeFunctionExpression = function (name, argumentNames, body) {
     // FIXME: The name should be interned in the outer scope
-    name = this.internName(name, false);
+    name = this.internName(name, true);
     argumentNames = Array.prototype.slice.call(argumentNames);
 
     for (var i = 0; i < argumentNames.length; i++)
