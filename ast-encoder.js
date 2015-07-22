@@ -159,8 +159,16 @@
   };
 
   ValueWriter.prototype.writeIndex = function (value) {
-    if (typeof (value) !== "number")
-      throw new Error("writeIndex expected number");
+    if (typeof (value) !== "number") {
+      if (
+        (typeof (value) === "object") && 
+        value &&
+        (value.type === "symbol")
+      )
+        value = value.valueOf();
+      else
+        throw new Error("writeIndex expected number");
+    }
 
     if (value === 0xFFFFFFFF)
       this.writeVarUint32(0);
@@ -558,6 +566,8 @@
       case "object":
         if (Array.isArray(value)) {
           return "array";
+        } else if (value.type === "symbol") {
+          return "symbol";
         } else {
           var shape = this.getShapeForObject(value);
           return shape.name;
@@ -857,6 +867,7 @@
         (tag !== "string") && 
         (tag !== "integer") && 
         (tag !== "double") && 
+        (tag !== "symbol") &&
         !Array.isArray(item)
       ) {
         // console.log(tag, "-> object");

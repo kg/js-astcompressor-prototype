@@ -14,11 +14,36 @@
 
   var baseClass = JsonTreeBuilder.prototype;
 
+  function Symbol (text, getBase, id) {
+    this.text    = text;
+    this.getBase = getBase || null;
+    this.id      = id | 0;
+  };
+
+  Symbol.prototype.type = "symbol";
+
+  Symbol.prototype.toString = function () {
+    return "#" + this.id + " (" + this.text + ")";
+  };
+
+  Symbol.prototype.valueOf = function () {
+    var base = 0;
+    if (this.getBase)
+      base = this.getBase() | 0;
+
+    var result = base + this.id;
+    return result;
+  };
+
+
   function AsmlikeJsonTreeBuilder () {
     JsonTreeBuilder.call(this);
 
     this.operatorTable = Object.create(null);
     this.operatorCount = 0;
+
+    this.externalSymbols = Object.create(null);
+    this.externalSymbolCount = 0;
 
     this.scopeChain = [
       Object.create(null)
@@ -26,6 +51,11 @@
 
     this.scopeChain[0].$$count = 0;
     this.internSymbols = false;
+
+    var self = this;
+    this.getSymbolBase = function getSymbolBase () { 
+      return self.externalSymbolCount; 
+    };
   };
 
   AsmlikeJsonTreeBuilder.prototype = Object.create(JsonTreeBuilder.prototype);
@@ -63,8 +93,9 @@
 
     var index = this.operatorTable[operator];
 
-    if (typeof (index) !== "number") {
-      index = this.operatorTable[operator] = (this.operatorCount++) | 0;
+    if (typeof (index) === "undefined") {
+      index = this.operatorTable[operator] = 
+        new Symbol(operator, null, (this.operatorCount++) | 0);
     }
 
     return index;
@@ -79,12 +110,24 @@
     if (name === null)
       return 0xFFFFFFFF;
 
-    var currentScope = this.scopeChain[this.scopeChain.length - 1];
-    var index = currentScope[name];
+    if (externallyVisible) {
+      var index = this.externalSymbols[name];
 
-    if (typeof (index) !== "number") {
-      index = currentScope[name] = (currentScope.$$count++) | 0;
+      if (typeof (index) === "undefined") {
+        index = this.externalSymbols[name] =
+          new Symbol(name, null, (this.externalSymbolCount++) | 0);
+      }
+    } else {
+      var currentScope = this.scopeChain[this.scopeChain.length - 1];
+      var index = currentScope[name];
+
+      if (typeof (index) === "undefined") {
+        index = currentScope[name] = 
+          new Symbol(name, this.getSymbolBase, (currentScope.$$count++) | 0);
+      }
     }
+
+    // console.log("symbol " + name + " = ", index);
 
     // HACK: The shape table lists string for these...
     return index;

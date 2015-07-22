@@ -74,11 +74,19 @@ console.timeEnd("serializeModule");
 fs.writeSync(fdOut, new Buffer(bytes), 0, bytes.length);
 
 if (common.DumpJson && outputAstFile) {
+  var converter = function (k, v) {
+    if ((typeof (v) === "object") && v && (v.type === "symbol")) {
+      return v.valueOf();
+    }
+
+    return v;
+  };
+
   var json;
   if (astEncoder.PrettyJson)
-    json = JSON.stringify(inputAst, null, 2)
+    json = JSON.stringify(inputAst, converter, 2)
   else
-    json = JSON.stringify(inputAst);
+    json = JSON.stringify(inputAst, converter);
 
   fs.writeFileSync(outputAstFile, json);
 }
