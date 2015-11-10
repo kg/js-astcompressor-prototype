@@ -17,5 +17,8 @@
   "TypeTagStream": false,
   "ValueStreamPerType": false,
   "ThreeByteIndices": false,
-  "NullTerminatedStrings": true
+  "NullTerminatedStrings": true,
+  "InternedSymbols": true,
+  "LocalSymbolsBeforeGlobals": true,
+  "BrIf": false
 }

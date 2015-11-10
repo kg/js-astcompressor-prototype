@@ -82,6 +82,9 @@
     // When packed inlining is enables, moves packed indices out of individual streams
     //  into a single stream
     this.PackedIndexStream           = false;
+
+    // Transform if statements into labels and br_if
+    this.BrIf                        = false;
   };
 
   exports.FromDictionary = function (dict) {

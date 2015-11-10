@@ -63,6 +63,14 @@
       "expressions": ["Expression"]
     },
     "LabelStatement": {
+      "label": "symbol",
+      "labelled": "Statement | Expression"
+    },
+    "BrIfFalse": {
+      "condition": "Expression",
+      "label": "symbol"
+    },
+    "MultiLabelStatement": {
       "labels": ["symbol"],
       "labelled": "Statement | Expression"
     },

@@ -49,6 +49,7 @@ if (configuration.DeduplicateObjects) {
 }
 
 var astBuilder = new (astBuilderType)(configuration, shapes);
+astBuilder.brIf = configuration.BrIf;
 
 console.time("asm-parse");
 var inputAst = asmParse.parse(inputReader, astBuilder);

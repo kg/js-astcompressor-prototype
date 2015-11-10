@@ -8,14 +8,17 @@
   "LocalityCutoffSmall": 128,
   "LocalityCutoffLarge": 8192,
   "LocalityMinimumThreshold": 3,
-  "InlineUseCountThreshold": null,
+  "InlineUseCountThreshold": 10,
   "InlineObjectSizeThreshold": null,
-  "ConditionalInlining": false,
+  "ConditionalInlining": true,
   "PartitionedInlining": false,
   "NoOverridingPrimitiveStream": false,
   "RelativeIndexes": false,
   "TypeTagStream": false,
   "ValueStreamPerType": false,
   "ThreeByteIndices": false,
-  "NullTerminatedStrings": false
+  "NullTerminatedStrings": true,
+  "InternedSymbols": true,
+  "LocalSymbolsBeforeGlobals": true,
+  "BrIf": true
 }

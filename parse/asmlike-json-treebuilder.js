@@ -56,6 +56,8 @@
     this.internSymbols = false;
     this.localSymbolsBeforeGlobals = false;
 
+    this.brIf = false;
+
     var self = this;
 
     this.getLocalSymbolBase = function getLocalSymbolBase () {
@@ -238,6 +240,52 @@
     variableName = this.internName(variableName, false);
 
     return baseClass.makeForInDeclaration.call(this, variableName, sequenceExpression);
+  };
+
+  AsmlikeJsonTreeBuilder.prototype.makeIfStatement = function (condition, trueStatement, falseStatement) {
+    if (this.brIf) {
+      var id = this._ifCount++ | 0;
+      var falseLabel = "$_if" + id + "_false";
+      var exitLabel  = "$_if" + id + "_exit";
+
+      var mainBlock = this.makeBlock();
+      var mainBlockParent = this.makeLabelStatement([exitLabel], mainBlock);
+      var falseBlock = this.makeBlock();
+      var falseBlockParent = this.makeLabelStatement([falseLabel], falseBlock);
+
+      // exitLabel: {
+      //   falseLabel: {
+      //     if (cond) ; else break falseLabel;
+      //     trueStatement;
+      //     break exitLabel;
+      //   }
+      //   falseStatement;
+      // }
+
+      this.appendToBlock(mainBlock, falseBlockParent);
+
+      var conditionalBranch = this.make("BrIfFalse");
+      conditionalBranch.condition = condition;
+      conditionalBranch.label = this.internName(falseLabel, false);
+      this.finalize(conditionalBranch);
+
+      this.appendToBlock(falseBlock, conditionalBranch);
+      this.appendToBlock(falseBlock, trueStatement);
+      this.appendToBlock(
+        falseBlock,
+        this.makeBreakStatement(exitLabel)
+      );
+      this.appendToBlock(mainBlock, falseStatement);
+
+      this.finishBlock(falseBlock);
+      this.finishBlock(mainBlock);
+      this.finalize(falseBlock);
+      this.finalize(mainBlock);
+
+      return mainBlockParent;
+    } else {
+      return baseClass.makeIfStatement.call(this, condition, trueStatement, falseStatement);
+    }
   };
 
   AsmlikeJsonTreeBuilder.prototype.makeBreakStatement = function (label) {

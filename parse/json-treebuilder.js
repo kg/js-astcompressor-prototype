@@ -99,8 +99,18 @@
   };
 
   JsonTreeBuilder.prototype.makeLabelStatement = function (labels, labelled) {
-    var result = this.make("LabelStatement");
-    result.labels = labels;
+    var result;
+
+    if (labels.length === 1) {
+      result = this.make("LabelStatement");
+      result.label = labels[0];
+    } else if (labels.length === 0) {
+      throw new Error("No labels");
+    } else {
+      result = this.make("MultiLabelStatement");
+      result.labels = labels;
+    }
+    
     result.labelled = labelled;
     return this.finalize(result);
   };
